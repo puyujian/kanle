@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "nodemon src/index.ts",
     "build": "tsc",
+    "test:ai": "node --test dist/tests/ai.test.js",
     "start": "node dist/index.js",
     "db:seed": "ts-node src/scripts/seed.ts",
     "db:reset-likes": "ts-node src/scripts/reset-likes.ts"
@@ -32,6 +33,7 @@
     "multer": "^2.2.0",
     "mysql2": "^3.22.5",
     "nodemailer": "^9.0.3",
+    "qs": "^6.15.3",
     "rss-parser": "^3.13.0",
     "sequelize": "^6.37.8",
     "slugify": "^1.6.9",
@@ -47,6 +49,7 @@
     "@types/multer": "^2.1.0",
     "@types/node": "^26.0.1",
     "@types/nodemailer": "^8.0.1",
+    "@types/qs": "^6.15.1",
     "@types/uuid": "^10.0.0",
     "nodemon": "^3.1.14",
     "ts-node": "^10.9.2",

@@ -12,6 +12,7 @@ import { TextStyle } from "@tiptap/extension-text-style";
 import Color from "@tiptap/extension-color";
 import { TableKit } from "@tiptap/extension-table";
 import { X } from "lucide-react";
+import ArticleAiAssistant from "./ai/ArticleAiAssistant";
 
 import { CustomImage } from "./editor/nodes/custom-image";
 import { InlineEmoji } from "./editor/nodes/inline-emoji";
@@ -56,6 +57,8 @@ interface ArticleEditorProps {
   onChange: (html: string) => void;
   token: string;
   placeholder?: string;
+  title?: string;
+  onTitleChange?: (title: string) => void;
 }
 
 function findAdjacentImageGroup(state: { selection: { $from: ResolvedPos; node?: PMNode; from: number } }): { pos: number; node: PMNode } | null {
@@ -111,6 +114,8 @@ export default function ArticleEditor({
   onChange,
   token,
   placeholder = "开始写作...",
+  title = "",
+  onTitleChange = () => {},
 }: ArticleEditorProps) {
   const [sourceMode, setSourceMode] = useState(false);
   const [sourceContent, setSourceContent] = useState(value);
@@ -132,6 +137,7 @@ export default function ArticleEditor({
   const [showArticlePicker, setShowArticlePicker] = useState(false);
   const [showMdImport, setShowMdImport] = useState(false);
   const [mdText, setMdText] = useState("");
+  const [showAiAssistant, setShowAiAssistant] = useState(false);
 
   const { closing: mdClosing, handleClose: handleMdClose } = useExitAnimation(() => {
     setShowMdImport(false);
@@ -528,6 +534,7 @@ export default function ArticleEditor({
           onOpenArticle={() => setShowArticlePicker(true)}
           onOpenImagePicker={() => fileInputRef.current?.click()}
           onInsertImageGroup={handleInsertImageGroup}
+          onOpenAi={() => setShowAiAssistant(true)}
         />
 
         {/* Editor area / Source mode */}
@@ -637,6 +644,15 @@ export default function ArticleEditor({
           open={showArticlePicker}
           onClose={() => setShowArticlePicker(false)}
           onSelect={handleArticleSelect}
+        />
+
+        <ArticleAiAssistant
+          editor={editor}
+          sourceMode={sourceMode}
+          title={title}
+          onTitleChange={onTitleChange}
+          open={showAiAssistant}
+          onClose={() => setShowAiAssistant(false)}
         />
       </div>
     </EditorContext.Provider>

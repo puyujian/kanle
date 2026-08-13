@@ -364,6 +364,8 @@ export default function ArticleEditorPage({ articleId }: ArticleEditorPageProps)
             onChange={setContent}
             token={getToken() || ""}
             placeholder="开始写作..."
+            title={title}
+            onTitleChange={setTitle}
           />
         </div>
 

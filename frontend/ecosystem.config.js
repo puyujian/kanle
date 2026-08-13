@@ -10,7 +10,7 @@ module.exports = {
     max_memory_restart: "300M",
     env: {
       NODE_ENV: "production",
-      PORT: "3000",
+      PORT: "3100",
       HOSTNAME: "127.0.0.1"
     },
     log_date_format: "YYYY-MM-DD HH:mm:ss",

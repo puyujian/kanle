@@ -56,6 +56,8 @@ import MediaPicker, { type PickerMediaItem } from "./MediaPicker";
 import DoubanPicker from "./DoubanPicker";
 import DoubanEmbedCard from "./article/DoubanEmbedCard";
 import DoubanSidebar from "./DoubanSidebar";
+import AiResultDialog from "./ai/AiResultDialog";
+import { plainTextToParagraphHtml, protectRichHtml, restoreProtectedHtml, streamAiGeneration } from "@/lib/ai-client";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000/api";
 const AUDIO_BASE = API_URL.replace("/api", "");
@@ -605,6 +607,18 @@ export default function TopBar({ coverHeight = 300 }: TopBarProps) {
             >
               <Contact className="h-[18px] w-[18px]" />
             </button>
+            )}
+
+            {/* 登录 — 移动端顶栏直接入口（未登录时显示） */}
+            {!loggedIn && (
+              <button
+                type="button"
+                onClick={() => setShowLogin(true)}
+                className={`flex h-8 w-8 items-center justify-center rounded-full transition-colors md:hidden ${iconClass}`}
+                aria-label="登录"
+              >
+                <UserRound className="h-[18px] w-[18px]" />
+              </button>
             )}
 
             {/* Camera (发布动态) — 移动端最右侧，仅登录后显示 */}
@@ -1184,6 +1198,62 @@ export function PublishModal({
   const [commentsDisabled, setCommentsDisabled] = useState(editPost?.commentsDisabled ?? false);
   // 作为广告发布：勾选后该动态以广告形式展示
   const [isAd, setIsAd] = useState(!!editPost?.isAd);
+  const [aiAvailable, setAiAvailable] = useState(false);
+  const [aiDialogOpen, setAiDialogOpen] = useState(false);
+  const [aiOriginal, setAiOriginal] = useState("");
+  const [aiResult, setAiResult] = useState("");
+  const [aiGenerating, setAiGenerating] = useState(false);
+  const [aiError, setAiError] = useState("");
+  const aiControllerRef = useRef<AbortController | null>(null);
+  const aiSnapshotRef = useRef("");
+  const aiFragmentsRef = useRef<string[]>([]);
+
+  useEffect(() => {
+    fetch(`${API_URL}/ai/status`, { headers: { Authorization: `Bearer ${token}` } })
+      .then((res) => res.ok ? res.json() : null)
+      .then((data) => setAiAvailable(!!data?.available))
+      .catch(() => setAiAvailable(false));
+  }, [token]);
+
+  const handleAiPolish = async () => {
+    const protectedContent = protectRichHtml(content);
+    if (!protectedContent.text.trim()) {
+      setError("请先输入需要润色的想法");
+      return;
+    }
+    aiSnapshotRef.current = content;
+    aiFragmentsRef.current = protectedContent.fragments;
+    setAiOriginal(protectedContent.text);
+    setAiResult("");
+    setAiError("");
+    setAiDialogOpen(true);
+    setAiGenerating(true);
+    const controller = new AbortController();
+    aiControllerRef.current = controller;
+    try {
+      await streamAiGeneration(
+        { mode: "moment_polish", content: protectedContent.text },
+        { signal: controller.signal, onDelta: (text) => setAiResult((prev) => prev + text) }
+      );
+    } catch (err) {
+      if ((err as Error).name !== "AbortError") setAiError(err instanceof Error ? err.message : "AI 润色失败");
+    } finally {
+      setAiGenerating(false);
+    }
+  };
+
+  const applyAiPolish = () => {
+    if (content !== aiSnapshotRef.current) {
+      setAiError("正文在生成期间已被修改。为避免覆盖新内容，请重新生成");
+      return;
+    }
+    try {
+      setContent(restoreProtectedHtml(aiResult, aiFragmentsRef.current, plainTextToParagraphHtml));
+      setAiDialogOpen(false);
+    } catch (err) {
+      setAiError(err instanceof Error ? err.message : "应用结果失败");
+    }
+  };
 
   const uploadOne = async (
     file: File,
@@ -1722,6 +1792,8 @@ export function PublishModal({
           linkCardLoading={linkCardLoading}
           hasLinkCard={!!linkCard}
           onDouban={() => setShowDoubanPicker(true)}
+          onAiPolish={aiAvailable ? handleAiPolish : undefined}
+          aiDisabled={aiGenerating}
         />
 
         {/* Image grid - 微信风格 3 列网格 */}
@@ -2374,6 +2446,17 @@ export function PublishModal({
           </p>
         )}
       </div>
+      <AiResultDialog
+        open={aiDialogOpen}
+        title="AI 润色动态"
+        original={aiOriginal}
+        result={aiResult}
+        generating={aiGenerating}
+        error={aiError}
+        onCancel={() => { aiControllerRef.current?.abort(); setAiDialogOpen(false); }}
+        onStop={() => aiControllerRef.current?.abort()}
+        onApply={applyAiPolish}
+      />
 
       {/* ===== Music Panel (search + upload) ===== */}
       {showMusicPanel && (

@@ -39,6 +39,7 @@ import {
   Minus as MinusIcon,
   Trash2,
   LayoutGrid,
+  Sparkles,
 } from "lucide-react";
 import { EMOJI_LIST } from "@/lib/emoji";
 import EmojiPicker from "@/components/EmojiPicker";
@@ -75,6 +76,7 @@ interface ToolbarProps {
   onOpenArticle: () => void;
   onOpenImagePicker: () => void;
   onInsertImageGroup: () => void;
+  onOpenAi: () => void;
 }
 
 interface ToolBtn {
@@ -99,6 +101,7 @@ export default function Toolbar({
   onOpenArticle,
   onOpenImagePicker,
   onInsertImageGroup,
+  onOpenAi,
 }: ToolbarProps) {
   const [showLink, setShowLink] = useState(false);
   const [linkUrl, setLinkUrl] = useState("");
@@ -566,6 +569,16 @@ export default function Toolbar({
         {renderBtn({ key: "douban", title: "插入豆瓣卡片", icon: <Film className="h-4 w-4" />, onClick: onOpenDouban, disabled: sourceMode })}
         {renderBtn({ key: "article", title: "插入文章卡片", icon: <FileText className="h-4 w-4" />, onClick: onOpenArticle, disabled: sourceMode })}
       </div>
+
+      <Divider />
+
+      {renderBtn({
+        key: "ai",
+        title: "AI 写作助手",
+        icon: <Sparkles className="h-4 w-4" />,
+        onClick: onOpenAi,
+        disabled: sourceMode,
+      })}
 
       <Divider />
 

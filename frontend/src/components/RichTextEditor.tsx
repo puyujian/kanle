@@ -15,6 +15,7 @@ import {
   LayoutTemplate,
   Smile,
   Film,
+  Sparkles,
 } from "lucide-react";
 import { sanitizeHtml } from "@/lib/sanitize";
 import { EMOJI_LIST } from "@/lib/emoji";
@@ -33,6 +34,9 @@ interface RichTextEditorProps {
   hasLinkCard?: boolean;
   /** 豆瓣卡片回调：打开豆瓣选择器 */
   onDouban?: () => void;
+  /** AI 润色回调 */
+  onAiPolish?: () => void;
+  aiDisabled?: boolean;
 }
 
 export default function RichTextEditor({
@@ -44,6 +48,8 @@ export default function RichTextEditor({
   linkCardLoading = false,
   hasLinkCard = false,
   onDouban,
+  onAiPolish,
+  aiDisabled = false,
 }: RichTextEditorProps) {
   const editorRef = useRef<HTMLDivElement | null>(null);
   const savedRange = useRef<Range | null>(null);
@@ -70,6 +76,13 @@ export default function RichTextEditor({
     updateEmpty();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // AI 应用结果等外部更新需要同步回 contentEditable；普通输入时 HTML 相同，不会重置光标。
+  useEffect(() => {
+    if (!editorRef.current || editorRef.current.innerHTML === value) return;
+    editorRef.current.innerHTML = value || "";
+    updateEmpty();
+  }, [value, updateEmpty]);
 
   const saveSelection = useCallback(() => {
     const sel = window.getSelection();
@@ -292,6 +305,21 @@ export default function RichTextEditor({
         {/* 加粗 / 斜体 / 下划线 / 删除线 */}
         <div className="flex items-center gap-0.5">{groupFormat.map(renderBtn)}</div>
         <Divider />
+        {onAiPolish && (
+          <>
+            <button
+              type="button"
+              title="AI 润色"
+              onMouseDown={preventBlur}
+              onClick={onAiPolish}
+              disabled={aiDisabled}
+              className="flex h-8 items-center gap-1 rounded px-2 text-violet-600 transition-colors hover:bg-violet-50 disabled:cursor-not-allowed disabled:opacity-40 dark:text-violet-400 dark:hover:bg-violet-500/10"
+            >
+              <Sparkles className="h-4 w-4" /><span className="text-xs">AI 润色</span>
+            </button>
+            <Divider />
+          </>
+        )}
         {/* 豆瓣卡片 */}
         {onDouban && (
           <button

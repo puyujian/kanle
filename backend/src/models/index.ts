@@ -10,6 +10,7 @@ import Blacklist from "./Blacklist";
 import Media from "./Media";
 import RssSource from "./RssSource";
 import RssArticle from "./RssArticle";
+import AiSetting from "./AiSetting";
 
 // Associations
 User.hasMany(Post, { foreignKey: "userId", as: "posts" });
@@ -35,5 +36,5 @@ User.hasMany(Media, { foreignKey: "uploaderId", as: "uploadedMedia" });
 RssSource.hasMany(RssArticle, { foreignKey: "sourceId", as: "articles" });
 RssArticle.belongsTo(RssSource, { foreignKey: "sourceId", as: "source" });
 
-export { sequelize, User, Post, Comment, Like, CommentLike, SiteSetting, FriendLink, Blacklist, Media, RssSource, RssArticle };
+export { sequelize, User, Post, Comment, Like, CommentLike, SiteSetting, FriendLink, Blacklist, Media, RssSource, RssArticle, AiSetting };
 export { getMediaCategory } from "./Media";

@@ -212,6 +212,10 @@ CLIENT_URL=http://localhost:3000
 
 # 按需重验证密钥（须与前端一致，默认即可）
 REVALIDATE_SECRET=kanle-revalidate
+
+# AI 配置加密密钥（用于加密后台保存的 API Key）
+# 请运行 openssl rand -hex 32 生成，设置后不要随意更换
+AI_CONFIG_ENCRYPTION_KEY=请改成64位十六进制随机字符串
 ```
 
 构建并初始化数据库：
@@ -406,6 +410,7 @@ pm2 restart kanle-frontend
 | `ADMIN_USERNAME` | 否 | `admin` | 管理员用户名 |
 | `CLIENT_URL` | 否 | `http://localhost:3000` | 前端地址（CORS + revalidate 回调） |
 | `REVALIDATE_SECRET` | 否 | `kanle-revalidate` | 按需重验证密钥（须与前端一致） |
+| `AI_CONFIG_ENCRYPTION_KEY` | 使用 AI 时是 | - | 32 字节 AI 配置加密密钥，可用 `openssl rand -hex 32` 生成；更换后需重新填写 API Key |
 
 ### 前端（`frontend/.env.local`）
 
@@ -432,6 +437,15 @@ pm2 restart kanle-frontend
 | 豆瓣影单 | 站点设置 → 豆瓣配置 | 豆瓣 ID，自动同步电影/图书/音乐 |
 | 自动播放 | 音乐管理 → 进入网站自动播放 | 开启后访客进入网站自动播放歌单音乐 |
 | 站点信息 | 站点设置 | 站点名称、Favicon、背景图、备案号、夜间模式、RSS |
+| AI 写作 | AI 配置 | OpenAI/兼容接口地址、加密 API Key、模型、生成参数及各场景提示词 |
+
+### AI 写作配置
+
+1. 在后端 `.env` 设置 `AI_CONFIG_ENCRYPTION_KEY` 并重启后端。
+2. 登录后台进入“AI 配置”，填写 API Base URL、API Key 和模型，保存后运行连接测试。
+3. 启用 AI 功能后，前端“发表动态”会显示 AI 润色；后台文章编辑器会显示 AI 写作助手。
+
+AI 请求始终由后端代理，API Key 不会下发浏览器。动态和文章结果均先预览后应用，不会自动保存或发布。生产环境需要使用仓库提供的 Nginx AI 流式路由配置，否则代理缓冲可能导致生成内容无法实时显示。
 
 ## 常见问题
 

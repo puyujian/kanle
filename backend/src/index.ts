@@ -22,6 +22,7 @@ import pluginsRoutes from "./routes/plugins";
 import doubanRoutes from "./routes/douban";
 import rssRoutes from "./routes/rss";
 import analyticsRoutes from "./routes/analytics";
+import aiRoutes from "./routes/ai";
 import { visitorCookieMiddleware } from "./middleware/visitor-cookie";
 import { loadAllPlugins, watchPluginsDir } from "./music-sources/mf-manager";
 
@@ -69,6 +70,7 @@ app.use("/api/admin/plugins", pluginsRoutes);
 app.use("/api/douban", doubanRoutes);
 app.use("/api/rss", rssRoutes);
 app.use("/api/analytics", analyticsRoutes);
+app.use("/api/ai", aiRoutes);
 
 // Error handler
 app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
