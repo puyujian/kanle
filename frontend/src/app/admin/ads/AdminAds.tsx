@@ -17,6 +17,7 @@ import {
   MessageSquare,
   ExternalLink,
   FileText,
+  Loader2,
 } from "lucide-react";
 import { apiFetch, getToken } from "@/lib/api-fetch";
 import { uploadImage, toAbsoluteUrl } from "@/lib/upload";
@@ -87,6 +88,7 @@ export default function AdminAds() {
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [uploadingImages, setUploadingImages] = useState(false);
   const [permId, setPermId] = useState<string | null>(null);
+  const [convertingId, setConvertingId] = useState<string | null>(null);
   const avatarInputRef = useRef<HTMLInputElement>(null);
   const imagesInputRef = useRef<HTMLInputElement>(null);
 
@@ -232,10 +234,10 @@ export default function AdminAds() {
   const handleTogglePermission = async (
     id: string,
     field: "likesDisabled" | "commentsDisabled",
-    current: boolean
+    current: boolean,
   ) => {
     if (!token) return;
-    setPermId(id);
+    setPermId(`${id}:${field}`);
     try {
       const res = await apiFetch(`/ads/${id}`, {
         method: "PUT",
@@ -244,7 +246,9 @@ export default function AdminAds() {
       });
       if (res.ok) {
         setAds((prev) =>
-          prev.map((a) => (a.id === id ? { ...a, [field]: !current } : a))
+          prev.map((a) =>
+            a.id === id ? { ...a, [field]: !current } : a,
+          ),
         );
       } else {
         alert("操作失败");
@@ -257,16 +261,19 @@ export default function AdminAds() {
   };
 
   const handleConvertToPost = async (id: string) => {
-    if (!confirm("确定将这条广告转回普通动态吗？")) return;
+    setConvertingId(id);
     try {
       const res = await apiFetch(`/ads/${id}/convert-to-post`, { method: "POST" });
       if (res.ok) {
         setAds((prev) => prev.filter((a) => a.id !== id));
+        setConfirmConvertId(null);
       } else {
         alert("操作失败");
       }
     } catch {
       alert("网络错误");
+    } finally {
+      setConvertingId(null);
     }
   };
 
@@ -279,19 +286,20 @@ export default function AdminAds() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
+      <div className="flex items-center justify-between gap-3">
+        <div className="min-w-0">
           <h2 className="text-xl font-bold text-adm-text">广告管理</h2>
-          <p className="mt-1 text-sm text-adm-text-secondary">
-            管理朋友圈信息流中展示的广告（插入第 5 条动态之后）
+          <p className="mt-1 text-sm leading-5 text-adm-text-secondary">
+            管理朋友圈信息流广告
+            <span className="hidden sm:inline">（插入第 5 条动态之后）</span>
           </p>
         </div>
         {!showForm && (
           <button
             onClick={startAdd}
-            className="flex items-center gap-1.5 rounded-xl bg-adm-primary px-4 py-2 text-sm font-medium text-adm-primary-text transition-colors hover:opacity-90"
+            className="flex shrink-0 items-center gap-1.5 rounded-xl bg-adm-primary px-3 py-2 text-sm font-medium text-adm-primary-text transition-colors hover:opacity-90 sm:px-4"
           >
             <Plus className="h-4 w-4" />
             添加广告
@@ -302,7 +310,7 @@ export default function AdminAds() {
       {/* Add/Edit form */}
       {(showForm || closing) && createPortal(
         <div
-          className={`fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 ${
+          className={`fixed inset-0 z-50 flex items-end justify-center bg-black/50 sm:items-center sm:p-4 ${
             closing ? "animate-overlay-out" : "animate-overlay-in"
           }`}
           onClick={handleClose}
@@ -310,7 +318,7 @@ export default function AdminAds() {
         <form
           onSubmit={handleSave}
           onClick={(e) => e.stopPropagation()}
-          className={`w-full max-w-3xl max-h-[90vh] overflow-y-auto rounded-2xl border border-adm-border bg-adm-card p-5 shadow-lg ${
+          className={`max-h-[calc(100dvh-3.5rem)] w-full max-w-3xl overflow-y-auto rounded-t-2xl border border-adm-border bg-adm-card p-4 pb-[max(1rem,env(safe-area-inset-bottom))] shadow-lg sm:max-h-[90vh] sm:rounded-2xl sm:p-5 ${
             closing ? "animate-modal-out" : "animate-modal-in"
           }`}
         >
@@ -328,14 +336,14 @@ export default function AdminAds() {
           </div>
 
           {/* 头像 + 昵称 */}
-          <div className="flex items-start gap-4">
+          <div className="flex items-start gap-3 sm:gap-4">
             <div className="shrink-0">
               <label className="mb-1.5 block text-xs font-medium text-adm-text-secondary">
                 广告头像
               </label>
               <div
                 onClick={() => avatarInputRef.current?.click()}
-                className="relative h-16 w-16 cursor-pointer overflow-hidden rounded-full border border-adm-border bg-adm-input"
+                className="relative h-14 w-14 cursor-pointer overflow-hidden rounded-full border border-adm-border bg-adm-input sm:h-16 sm:w-16"
               >
                 {resolveAdAvatar(form.adAvatar) ? (
                   <Image
@@ -369,7 +377,7 @@ export default function AdminAds() {
                 }}
               />
             </div>
-            <div className="flex-1 space-y-3">
+            <div className="min-w-0 flex-1 space-y-3">
               <div>
                 <label className="mb-1.5 block text-xs font-medium text-adm-text-secondary">
                   邮箱 / 图片链接
@@ -544,11 +552,11 @@ export default function AdminAds() {
 
           {/* 互动权限（仅编辑时可切换；新建默认开启） */}
           {editingId && (
-            <div className="mt-4 flex flex-wrap gap-3">
+            <div className="mt-4 grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:gap-3">
               <button
                 type="button"
                 onClick={() => setForm({ ...form, likesDisabled: !form.likesDisabled })}
-                className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
+                className={`flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-xs font-medium transition-colors sm:py-1.5 ${
                   form.likesDisabled
                     ? "text-adm-danger bg-adm-danger-bg"
                     : "text-adm-text-secondary bg-adm-card-hover"
@@ -562,7 +570,7 @@ export default function AdminAds() {
                 onClick={() =>
                   setForm({ ...form, commentsDisabled: !form.commentsDisabled })
                 }
-                className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
+                className={`flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-xs font-medium transition-colors sm:py-1.5 ${
                   form.commentsDisabled
                     ? "text-adm-danger bg-adm-danger-bg"
                     : "text-adm-text-secondary bg-adm-card-hover"
@@ -575,11 +583,11 @@ export default function AdminAds() {
           )}
 
           {/* 操作按钮 */}
-          <div className="mt-5 flex gap-2">
+          <div className="mt-5 grid grid-cols-2 gap-2 sm:flex">
             <button
               type="submit"
               disabled={saving}
-              className="flex items-center gap-1.5 rounded-xl bg-adm-primary px-4 py-2 text-sm font-medium text-adm-primary-text transition-colors hover:opacity-90 disabled:opacity-50"
+              className="flex items-center justify-center gap-1.5 rounded-xl bg-adm-primary px-4 py-2.5 text-sm font-medium text-adm-primary-text transition-colors hover:opacity-90 disabled:opacity-50 sm:py-2"
             >
               <Save className="h-4 w-4" />
               {saving ? "保存中..." : "保存"}
@@ -587,7 +595,7 @@ export default function AdminAds() {
             <button
               type="button"
               onClick={handleClose}
-              className="rounded-xl border border-adm-border px-4 py-2 text-sm text-adm-text-secondary transition-colors hover:bg-adm-card-hover"
+              className="rounded-xl border border-adm-border px-4 py-2.5 text-sm text-adm-text-secondary transition-colors hover:bg-adm-card-hover sm:py-2"
             >
               取消
             </button>
@@ -608,9 +616,9 @@ export default function AdminAds() {
           {ads.map((ad) => (
             <div
               key={ad.id}
-              className="rounded-2xl border border-adm-border bg-adm-card p-4 transition-colors hover:border-adm-text-tertiary"
+              className="overflow-hidden rounded-xl border border-adm-border bg-adm-card transition-colors hover:border-adm-text-tertiary sm:rounded-2xl"
             >
-              <div className="flex items-start gap-3">
+              <div className="flex items-start gap-3 p-3 sm:p-4">
                 <div className="relative h-10 w-10 shrink-0 overflow-hidden rounded-full bg-adm-input">
                   {ad.adAvatar ? (
                     <Image
@@ -665,54 +673,16 @@ export default function AdminAds() {
                     )}
                   </div>
                 </div>
-                <div className="flex shrink-0 gap-1">
-                  <button
-                    onClick={() => handleTogglePermission(ad.id, "likesDisabled", ad.likesDisabled)}
-                    disabled={permId === ad.id}
-                    title={ad.likesDisabled ? "已关闭点赞，点击开启" : "允许点赞，点击关闭"}
-                    className={`flex h-8 w-8 items-center justify-center rounded-lg transition-colors disabled:opacity-50 ${
-                      ad.likesDisabled
-                        ? "text-adm-danger bg-adm-danger-bg"
-                        : "text-adm-text-tertiary hover:bg-adm-card-hover hover:text-adm-text-secondary"
-                    }`}
-                  >
-                    <Heart className="h-4 w-4" />
-                  </button>
-                  <button
-                    onClick={() =>
-                      handleTogglePermission(ad.id, "commentsDisabled", ad.commentsDisabled)
-                    }
-                    disabled={permId === ad.id}
-                    title={ad.commentsDisabled ? "已关闭评论，点击开启" : "允许评论，点击关闭"}
-                    className={`flex h-8 w-8 items-center justify-center rounded-lg transition-colors disabled:opacity-50 ${
-                      ad.commentsDisabled
-                        ? "text-adm-danger bg-adm-danger-bg"
-                        : "text-adm-text-tertiary hover:bg-adm-card-hover hover:text-adm-text-secondary"
-                    }`}
-                  >
-                    <MessageSquare className="h-4 w-4" />
-                  </button>
-                  <button
-                    onClick={() => handleConvertToPost(ad.id)}
-                    title="转为动态"
-                    className="flex h-8 w-8 items-center justify-center rounded-lg text-adm-text-tertiary transition-colors hover:bg-adm-card-hover hover:text-adm-text-secondary"
-                  >
-                    <FileText className="h-4 w-4" />
-                  </button>
-                  <button
-                    onClick={() => startEdit(ad)}
-                    className="flex h-8 w-8 items-center justify-center rounded-lg text-adm-text-tertiary transition-colors hover:bg-adm-card-hover hover:text-adm-text-secondary"
-                  >
-                    <Pencil className="h-4 w-4" />
-                  </button>
-                  <button
-                    onClick={() => setConfirmDeleteId(ad.id)}
-                    className="flex h-8 w-8 items-center justify-center rounded-lg text-adm-text-tertiary transition-colors hover:bg-adm-danger-bg hover:text-adm-danger"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </button>
-                </div>
               </div>
+              <AdActions
+                ad={ad}
+                permId={permId}
+                converting={convertingId === ad.id}
+                onTogglePermission={handleTogglePermission}
+                onConvert={() => setConfirmConvertId(ad.id)}
+                onEdit={() => startEdit(ad)}
+                onDelete={() => setConfirmDeleteId(ad.id)}
+              />
             </div>
           ))}
         </div>
@@ -735,6 +705,95 @@ export default function AdminAds() {
         onConfirm={() => confirmConvertId && handleConvertToPost(confirmConvertId)}
         onCancel={() => setConfirmConvertId(null)}
       />
+    </div>
+  );
+}
+
+function AdActions({
+  ad,
+  permId,
+  converting,
+  onTogglePermission,
+  onConvert,
+  onEdit,
+  onDelete,
+}: {
+  ad: AdItem;
+  permId: string | null;
+  converting: boolean;
+  onTogglePermission: (
+    id: string,
+    field: "likesDisabled" | "commentsDisabled",
+    current: boolean,
+  ) => void;
+  onConvert: () => void;
+  onEdit: () => void;
+  onDelete: () => void;
+}) {
+  const permissionBusy = permId?.startsWith(`${ad.id}:`) ?? false;
+  const actionClass =
+    "flex min-w-0 items-center justify-center gap-1 rounded-lg px-1 py-2 text-[11px] font-medium text-adm-text-secondary transition-colors hover:bg-adm-card-hover disabled:cursor-wait disabled:opacity-50 sm:px-2";
+
+  return (
+    <div className="grid grid-cols-5 gap-1 border-t border-adm-border bg-adm-card-hover/30 px-1.5 py-1.5">
+      <button
+        type="button"
+        onClick={() =>
+          onTogglePermission(ad.id, "likesDisabled", ad.likesDisabled)
+        }
+        disabled={permissionBusy}
+        className={`${actionClass} ${ad.likesDisabled ? "bg-adm-danger-bg text-adm-danger" : ""}`}
+        title={ad.likesDisabled ? "开启点赞" : "关闭点赞"}
+      >
+        {permId === `${ad.id}:likesDisabled` ? (
+          <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" />
+        ) : (
+          <Heart className="h-3.5 w-3.5 shrink-0" />
+        )}
+        <span className="hidden min-[360px]:inline">{ad.likesDisabled ? "点赞关" : "点赞"}</span>
+      </button>
+      <button
+        type="button"
+        onClick={() =>
+          onTogglePermission(ad.id, "commentsDisabled", ad.commentsDisabled)
+        }
+        disabled={permissionBusy}
+        className={`${actionClass} ${ad.commentsDisabled ? "bg-adm-danger-bg text-adm-danger" : ""}`}
+        title={ad.commentsDisabled ? "开启评论" : "关闭评论"}
+      >
+        {permId === `${ad.id}:commentsDisabled` ? (
+          <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" />
+        ) : (
+          <MessageSquare className="h-3.5 w-3.5 shrink-0" />
+        )}
+        <span className="hidden min-[360px]:inline">{ad.commentsDisabled ? "评论关" : "评论"}</span>
+      </button>
+      <button
+        type="button"
+        onClick={onConvert}
+        disabled={converting}
+        className={actionClass}
+        title="转为动态"
+      >
+        {converting ? (
+          <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" />
+        ) : (
+          <FileText className="h-3.5 w-3.5 shrink-0" />
+        )}
+        <span className="hidden min-[360px]:inline">转动态</span>
+      </button>
+      <button type="button" onClick={onEdit} className={actionClass}>
+        <Pencil className="h-3.5 w-3.5 shrink-0" />
+        <span className="hidden min-[360px]:inline">编辑</span>
+      </button>
+      <button
+        type="button"
+        onClick={onDelete}
+        className={`${actionClass} text-adm-danger hover:bg-adm-danger-bg`}
+      >
+        <Trash2 className="h-3.5 w-3.5 shrink-0" />
+        <span className="hidden min-[360px]:inline">删除</span>
+      </button>
     </div>
   );
 }

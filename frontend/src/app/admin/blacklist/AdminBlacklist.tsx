@@ -246,7 +246,7 @@ export default function AdminBlacklist() {
 
       {/* 总开关卡片 */}
       <div
-        className={`rounded-2xl border p-4 transition-colors ${
+        className={`rounded-xl border p-3 transition-colors sm:rounded-2xl sm:p-4 ${
           enabled
             ? "border-adm-border bg-adm-card"
             : "border-adm-danger/30 bg-adm-danger-bg/30"
@@ -298,7 +298,7 @@ export default function AdminBlacklist() {
       </div>
 
       {/* 违禁词管理 */}
-      <div className="rounded-2xl border border-adm-border bg-adm-card p-4">
+      <div className="rounded-xl border border-adm-border bg-adm-card p-3 sm:rounded-2xl sm:p-4">
         <div className="mb-3 flex items-center justify-between gap-2">
           <div className="flex items-center gap-2">
             <ShieldAlert className="h-4 w-4 text-adm-text-secondary" />
@@ -324,7 +324,7 @@ export default function AdminBlacklist() {
         </p>
 
         {/* 添加输入框 */}
-        <div className="flex gap-2">
+        <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-2">
           <input
             type="text"
             value={bannedWordInput}
@@ -341,7 +341,7 @@ export default function AdminBlacklist() {
           <button
             onClick={handleAddBannedWord}
             disabled={savingBannedWords || !bannedWordInput.trim()}
-            className="flex items-center gap-1.5 rounded-lg bg-adm-primary px-4 py-2 text-sm font-medium text-adm-primary-text transition-opacity hover:opacity-90 disabled:opacity-50"
+            className="flex items-center justify-center gap-1.5 rounded-lg bg-adm-primary px-3 py-2 text-sm font-medium text-adm-primary-text transition-opacity hover:opacity-90 disabled:opacity-50 sm:px-4"
           >
             {savingBannedWords ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
             添加
@@ -380,13 +380,13 @@ export default function AdminBlacklist() {
       </div>
 
       {/* 添加封禁表单 */}
-      <div className="rounded-2xl border border-adm-border bg-adm-card p-4">
+      <div className="rounded-xl border border-adm-border bg-adm-card p-3 sm:rounded-2xl sm:p-4">
         <div className="mb-3 flex items-center gap-2">
           <Plus className="h-4 w-4 text-adm-text-secondary" />
           <h3 className="text-sm font-semibold text-adm-text">添加封禁</h3>
         </div>
         <div className="space-y-2.5">
-          <div className="flex gap-2">
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-[auto_minmax(0,1fr)]">
             <div className="flex rounded-lg border border-adm-border bg-adm-input p-0.5">
               <button
                 onClick={() => setFormType("email")}
@@ -456,12 +456,12 @@ export default function AdminBlacklist() {
 
       {/* 列表 */}
       <div className="space-y-2">
-        <div className="flex items-center justify-between gap-2">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-sm text-adm-text-secondary">
             共 {list.length} 条记录{search ? `，匹配 ${filtered.length} 条` : ""}
           </p>
           {list.length > 0 && (
-            <div className="relative w-40 sm:w-56">
+            <div className="relative w-full sm:w-56">
               <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-adm-text-tertiary" />
               <input
                 type="text"

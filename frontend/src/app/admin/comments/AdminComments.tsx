@@ -3,7 +3,19 @@
 import { useEffect, useState, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
-import { MessageCircle, Trash2, Search, Link2, Pencil, Check, X, Smile, ChevronDown, ChevronUp } from "lucide-react";
+import {
+  MessageCircle,
+  Trash2,
+  Search,
+  Link2,
+  Pencil,
+  Check,
+  X,
+  Smile,
+  ChevronDown,
+  ChevronUp,
+  Loader2,
+} from "lucide-react";
 import { cravatarUrl } from "@/lib/avatar";
 import { apiFetch, getToken } from "@/lib/api-fetch";
 import { renderTextWithEmoji, EMOJI_LIST, shortcodeToHtml, editableToShortcode, emojiImgTag } from "@/lib/emoji";
@@ -46,6 +58,7 @@ export default function AdminComments() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState({ author: "", email: "", website: "", content: "" });
   const [saving, setSaving] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const token = getToken();
 
@@ -74,10 +87,19 @@ export default function AdminComments() {
 
   const handleDelete = async (id: string) => {
     if (!token || !confirm("确定删除这条评论吗？")) return;
-    const res = await apiFetch(`/admin/comments/${id}`, { method: "DELETE" });
-    if (res.ok) {
-      setComments((prev) => prev.filter((c) => c.id !== id));
-      if (selectedId === id) setSelectedId(null);
+    setDeletingId(id);
+    try {
+      const res = await apiFetch(`/admin/comments/${id}`, { method: "DELETE" });
+      if (res.ok) {
+        setComments((prev) => prev.filter((c) => c.id !== id));
+        if (selectedId === id) setSelectedId(null);
+      } else {
+        alert("删除失败，请重试");
+      }
+    } catch {
+      alert("网络错误，请重试");
+    } finally {
+      setDeletingId(null);
     }
   };
 
@@ -120,7 +142,7 @@ export default function AdminComments() {
     (c) =>
       c.author.toLowerCase().includes(search.toLowerCase()) ||
       c.content.toLowerCase().includes(search.toLowerCase()) ||
-      c.email.toLowerCase().includes(search.toLowerCase())
+      c.email.toLowerCase().includes(search.toLowerCase()),
   );
 
   const selected = comments.find((c) => c.id === selectedId) || null;
@@ -137,7 +159,7 @@ export default function AdminComments() {
 
   return (
     <div className="space-y-3">
-      <div>
+      <div className="min-w-0">
         <h2 className="text-lg font-bold text-adm-text">评论管理</h2>
         <p className="mt-1 text-sm text-adm-text-secondary">
           共 {comments.length} 条评论
@@ -152,8 +174,18 @@ export default function AdminComments() {
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="搜索昵称、邮箱或内容..."
-          className="w-full rounded-xl border border-adm-border bg-adm-card py-2.5 pl-10 pr-3 text-sm text-adm-text transition-colors focus:border-adm-text-secondary focus:outline-none"
+          className="w-full rounded-xl border border-adm-border bg-adm-card py-2.5 pl-10 pr-10 text-sm text-adm-text transition-colors focus:border-adm-text-secondary focus:outline-none"
         />
+        {search && (
+          <button
+            type="button"
+            onClick={() => setSearch("")}
+            className="absolute right-2 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-lg text-adm-text-tertiary hover:bg-adm-card-hover hover:text-adm-text-secondary"
+            aria-label="清除搜索"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        )}
       </div>
 
       {filtered.length === 0 ? (
@@ -219,6 +251,7 @@ export default function AdminComments() {
                     comment={comment}
                     onStartEdit={startEdit}
                     onDelete={handleDelete}
+                    deleting={deletingId === comment.id}
                   />
                 )}
               </div>
@@ -321,7 +354,7 @@ function CommentDetail({
   }
 
   return (
-    <div className="rounded-2xl border border-adm-border bg-adm-card p-4">
+    <div className="rounded-xl border border-adm-border bg-adm-card p-3 sm:rounded-2xl sm:p-4">
       <div className="flex items-start gap-3">
         <div className="relative h-10 w-10 shrink-0 overflow-hidden rounded-lg bg-adm-input">
           <Image
@@ -541,7 +574,7 @@ function CommentEditCard({
           {showEmoji && (
             <div className="border-t border-adm-border px-2 py-2 animate-emoji-fade-in">
               <div
-                className="grid grid-cols-8 gap-1 overflow-y-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
+                className="grid grid-cols-6 place-items-center gap-1 overflow-y-auto min-[360px]:grid-cols-8 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
                 style={{ maxHeight: emojiExpanded ? "220px" : "none" }}
               >
                 {(emojiExpanded ? EMOJI_LIST : EMOJI_LIST.slice(0, 20)).map((emoji) => (
@@ -606,41 +639,49 @@ function CommentMobileCard({
   comment,
   onStartEdit,
   onDelete,
+  deleting,
 }: {
   comment: AdminComment;
   onStartEdit: (c: AdminComment) => void;
   onDelete: (id: string) => void;
+  deleting: boolean;
 }) {
   return (
-    <div className="rounded-xl border border-adm-border bg-adm-card p-3">
-      <div className="flex items-start gap-2.5">
-        <div className="relative h-8 w-8 shrink-0 overflow-hidden rounded-lg bg-adm-input">
+    <div className="overflow-hidden rounded-xl border border-adm-border bg-adm-card">
+      <div className="flex items-start gap-2.5 p-3">
+        <div className="relative h-9 w-9 shrink-0 overflow-hidden rounded-lg bg-adm-input">
           <Image
-            src={cravatarUrl(comment.email || "", 64)}
+            src={cravatarUrl(comment.email || "", 72)}
             alt={comment.author}
             fill
             className="object-cover"
-            sizes="32px"
+            sizes="36px"
             unoptimized
           />
         </div>
-        <div className="min-w-0 flex-1 space-y-1">
-          <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
-            <span className="text-sm font-medium text-adm-text">{comment.author}</span>
-            <span className="text-xs text-adm-text-tertiary">{comment.email}</span>
+        <div className="min-w-0 flex-1 space-y-1.5">
+          <div className="min-w-0">
+            <div className="flex min-w-0 items-center gap-2">
+              <span className="shrink-0 text-sm font-medium text-adm-text">
+                {comment.author}
+              </span>
+              <span className="min-w-0 truncate text-xs text-adm-text-tertiary">
+                {comment.email}
+              </span>
+            </div>
             {comment.website && (
               <a
                 href={comment.website.startsWith("http") ? comment.website : `https://${comment.website}`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex items-center gap-0.5 text-xs text-adm-text-secondary transition-colors hover:text-adm-primary"
+                className="mt-0.5 flex min-w-0 items-center gap-0.5 text-xs text-adm-text-secondary transition-colors hover:text-adm-primary"
               >
-                <Link2 className="h-3 w-3" />
-                {comment.website}
+                <Link2 className="h-3 w-3 shrink-0" />
+                <span className="truncate">{comment.website}</span>
               </a>
             )}
             {comment.replyTo && (
-              <span className="text-xs text-adm-text-tertiary">
+              <span className="mt-0.5 block text-xs text-adm-text-tertiary">
                 回复 <span className="text-adm-text-secondary">{comment.replyTo}</span>
               </span>
             )}
@@ -651,36 +692,46 @@ function CommentMobileCard({
             dangerouslySetInnerHTML={{ __html: renderTextWithEmoji(comment.content) }}
           />
 
-          <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1 pt-0.5">
-            <div className="flex min-w-0 flex-1 items-center gap-2 text-xs text-adm-text-tertiary">
-              <span>{new Date(comment.createdAt).toLocaleString("zh-CN")}</span>
+          <div className="space-y-1 text-[11px] text-adm-text-tertiary">
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+              <span className="whitespace-nowrap">
+                {new Date(comment.createdAt).toLocaleString("zh-CN")}
+              </span>
               {comment.region && (
                 <span>{comment.region}</span>
               )}
-              {comment.post && (
-                <span className="truncate">
-                  来自：{comment.post.author} · {truncate(stripHtml(comment.post.content), 20)}
-                </span>
-              )}
             </div>
-            <div className="flex shrink-0 items-center gap-1">
-              <button
-                onClick={() => onStartEdit(comment)}
-                className="flex items-center gap-1 rounded-lg px-2 py-1 text-xs text-adm-text-secondary transition-colors hover:bg-adm-card-hover"
-              >
-                <Pencil className="h-3 w-3" />
-                编辑
-              </button>
-              <button
-                onClick={() => onDelete(comment.id)}
-                className="flex items-center gap-1 rounded-lg px-2 py-1 text-xs text-adm-danger transition-colors hover:bg-adm-danger-bg"
-              >
-                <Trash2 className="h-3 w-3" />
-                删除
-              </button>
-            </div>
+            {comment.post && (
+              <p className="line-clamp-1 rounded bg-adm-input px-2 py-1">
+                来自：{comment.post.author} · {truncate(stripHtml(comment.post.content), 40)}
+              </p>
+            )}
           </div>
         </div>
+      </div>
+      <div className="grid grid-cols-2 border-t border-adm-border bg-adm-card-hover/30 p-1.5">
+        <button
+          type="button"
+          onClick={() => onStartEdit(comment)}
+          disabled={deleting}
+          className="flex items-center justify-center gap-1 rounded-lg py-2 text-xs text-adm-text-secondary transition-colors hover:bg-adm-card-hover disabled:opacity-50"
+        >
+          <Pencil className="h-3.5 w-3.5" />
+          编辑
+        </button>
+        <button
+          type="button"
+          onClick={() => onDelete(comment.id)}
+          disabled={deleting}
+          className="flex items-center justify-center gap-1 rounded-lg py-2 text-xs text-adm-danger transition-colors hover:bg-adm-danger-bg disabled:cursor-wait disabled:opacity-50"
+        >
+          {deleting ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          ) : (
+            <Trash2 className="h-3.5 w-3.5" />
+          )}
+          {deleting ? "删除中" : "删除"}
+        </button>
       </div>
     </div>
   );

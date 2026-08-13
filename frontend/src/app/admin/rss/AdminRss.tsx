@@ -203,18 +203,18 @@ export default function AdminRss() {
   return (
     <div className="space-y-4">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0">
           <h2 className="text-lg font-bold text-adm-text">订阅友圈</h2>
           <p className="mt-1 text-sm text-adm-text-secondary">
             管理 RSS 订阅源，聚合友圈文章
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="grid grid-cols-2 gap-2 sm:flex sm:items-center">
           <button
             onClick={handleRefresh}
             disabled={refreshing}
-            className="flex items-center gap-1.5 rounded-xl border border-adm-border px-4 py-2 text-sm font-medium text-adm-text-secondary transition-colors hover:bg-adm-card-hover disabled:opacity-50"
+            className="flex items-center justify-center gap-1.5 rounded-xl border border-adm-border px-3 py-2 text-sm font-medium text-adm-text-secondary transition-colors hover:bg-adm-card-hover disabled:opacity-50 sm:px-4"
           >
             <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />
             {refreshing ? "刷新中..." : "刷新所有"}
@@ -222,7 +222,7 @@ export default function AdminRss() {
           {!showForm && (
             <button
               onClick={startAdd}
-              className="flex items-center gap-1.5 rounded-xl bg-adm-primary px-4 py-2 text-sm font-medium text-adm-primary-text transition-colors hover:opacity-90"
+              className="flex items-center justify-center gap-1.5 rounded-xl bg-adm-primary px-3 py-2 text-sm font-medium text-adm-primary-text transition-colors hover:opacity-90 sm:px-4"
             >
               <Plus className="h-4 w-4" />
               添加订阅源
@@ -234,7 +234,7 @@ export default function AdminRss() {
       {/* Add/Edit form */}
       {(showForm || closing) && createPortal(
         <div
-          className={`fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 ${
+          className={`fixed inset-0 z-50 flex items-end justify-center bg-black/50 sm:items-center sm:p-4 ${
             closing ? "animate-overlay-out" : "animate-overlay-in"
           }`}
           onClick={handleClose}
@@ -242,7 +242,7 @@ export default function AdminRss() {
         <form
           onSubmit={handleSave}
           onClick={(e) => e.stopPropagation()}
-          className={`w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-2xl border border-adm-border bg-adm-card p-5 shadow-lg ${
+          className={`max-h-[calc(100dvh-3.5rem)] w-full max-w-lg overflow-y-auto rounded-t-2xl border border-adm-border bg-adm-card p-4 pb-[max(1rem,env(safe-area-inset-bottom))] shadow-lg sm:max-h-[90vh] sm:rounded-2xl sm:p-5 ${
             closing ? "animate-modal-out" : "animate-modal-in"
           }`}
         >
@@ -293,12 +293,12 @@ export default function AdminRss() {
             <label className="mb-1.5 block text-xs font-medium text-adm-text-secondary">
               头像（选填）
             </label>
-            <div className="flex items-start gap-4">
+            <div className="flex items-start gap-3 sm:gap-4">
               {/* 左侧：头像预览 + 上传按钮 */}
               <div className="shrink-0 flex flex-col items-center gap-2">
                 <div
                   onClick={() => avatarInputRef.current?.click()}
-                  className="group relative h-20 w-20 cursor-pointer overflow-hidden rounded-full border border-adm-border bg-adm-input transition-colors hover:border-adm-text-secondary"
+                  className="group relative h-16 w-16 cursor-pointer overflow-hidden rounded-full border border-adm-border bg-adm-input transition-colors hover:border-adm-text-secondary sm:h-20 sm:w-20"
                   title="点击上传图片"
                 >
                   {resolveSourceAvatar(form, 160) ? (
@@ -435,11 +435,11 @@ export default function AdminRss() {
             />
           </div>
 
-          <div className="mt-5 flex gap-2">
+          <div className="mt-5 grid grid-cols-2 gap-2 sm:flex">
             <button
               type="submit"
               disabled={saving}
-              className="flex items-center gap-1.5 rounded-xl bg-adm-primary px-4 py-2 text-sm font-medium text-adm-primary-text transition-colors hover:opacity-90 disabled:opacity-50"
+              className="flex items-center justify-center gap-1.5 rounded-xl bg-adm-primary px-4 py-2.5 text-sm font-medium text-adm-primary-text transition-colors hover:opacity-90 disabled:opacity-50 sm:py-2"
             >
               <Save className="h-4 w-4" />
               {saving ? "保存中..." : "保存"}
@@ -447,7 +447,7 @@ export default function AdminRss() {
             <button
               type="button"
               onClick={handleClose}
-              className="rounded-xl border border-adm-border px-4 py-2 text-sm text-adm-text-secondary transition-colors hover:bg-adm-card-hover"
+              className="rounded-xl border border-adm-border px-4 py-2.5 text-sm text-adm-text-secondary transition-colors hover:bg-adm-card-hover sm:py-2"
             >
               取消
             </button>
@@ -468,8 +468,9 @@ export default function AdminRss() {
           {sources.map((source) => (
             <div
               key={source.id}
-              className="flex items-center gap-3 rounded-xl border border-adm-border bg-adm-card p-4 transition-colors hover:border-adm-text-tertiary"
+              className="overflow-hidden rounded-xl border border-adm-border bg-adm-card transition-colors hover:border-adm-text-tertiary"
             >
+              <div className="flex items-center gap-2.5 p-3 sm:gap-3 sm:p-4">
               <GripVertical className="h-4 w-4 shrink-0 text-adm-text-tertiary" />
               <div className="relative h-9 w-9 shrink-0 overflow-hidden rounded-lg bg-adm-input">
                 {/* 默认头像（底层） */}
@@ -497,27 +498,32 @@ export default function AdminRss() {
                   href={source.url}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="mt-0.5 inline-flex items-center gap-1 text-xs text-wechat-link hover:underline"
+                  className="mt-0.5 flex min-w-0 items-center gap-1 text-xs text-wechat-link hover:underline"
                 >
-                  {source.url}
-                  <ExternalLink className="h-3 w-3" />
+                  <span className="truncate">{source.url}</span>
+                  <ExternalLink className="h-3 w-3 shrink-0" />
                 </a>
               </div>
               <div className="shrink-0 rounded-md bg-adm-input px-2 py-1 text-[11px] text-adm-text-secondary">
                 {source.articleCount ?? 0} 篇
               </div>
-              <div className="flex shrink-0 gap-1">
+              </div>
+              <div className="grid grid-cols-2 border-t border-adm-border bg-adm-card-hover/30 p-1.5">
                 <button
+                  type="button"
                   onClick={() => startEdit(source)}
-                  className="flex h-8 w-8 items-center justify-center rounded-lg text-adm-text-tertiary transition-colors hover:bg-adm-card-hover hover:text-adm-text-secondary"
+                  className="flex items-center justify-center gap-1 rounded-lg py-2 text-xs text-adm-text-secondary transition-colors hover:bg-adm-card-hover"
                 >
-                  <Pencil className="h-4 w-4" />
+                  <Pencil className="h-3.5 w-3.5" />
+                  编辑
                 </button>
                 <button
+                  type="button"
                   onClick={() => setConfirmDeleteId(source.id)}
-                  className="flex h-8 w-8 items-center justify-center rounded-lg text-adm-text-tertiary transition-colors hover:bg-adm-danger-bg hover:text-adm-danger"
+                  className="flex items-center justify-center gap-1 rounded-lg py-2 text-xs text-adm-danger transition-colors hover:bg-adm-danger-bg"
                 >
-                  <Trash2 className="h-4 w-4" />
+                  <Trash2 className="h-3.5 w-3.5" />
+                  删除
                 </button>
               </div>
             </div>
