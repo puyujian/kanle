@@ -199,7 +199,7 @@ export default function PostList({ initialPosts, initialHasMore, initialPage }: 
     <>
       <section className="divide-hairline">
         {displayList.map((post, index) => (
-          <PostCard key={post.id} post={post} index={index} />
+          <PostCard key={post.id} post={post} index={index} fillEmbeds />
         ))}
       </section>
 

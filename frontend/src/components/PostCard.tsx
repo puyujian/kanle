@@ -42,6 +42,8 @@ interface PostCardProps {
   index: number;
   /** 管理后台传入时显示删除入口 */
   onDelete?: () => void;
+  /** 首页信息流使用：文章、音乐、链接等卡片填满内容栏。 */
+  fillEmbeds?: boolean;
 }
 
 function stripRichEmbeds(html: string): string {
@@ -50,7 +52,7 @@ function stripRichEmbeds(html: string): string {
     .replace(/<a\s+[^>]*class="[^"]*link-card[^"]*"[^>]*>[\s\S]*?<\/a>/gi, "");
 }
 
-export default function PostCard({ post, index, onDelete }: PostCardProps) {
+export default function PostCard({ post, index, onDelete, fillEmbeds = false }: PostCardProps) {
   const router = useRouter();
   const isArticle = post.type === "article";
   const articleDetailUrl = `/articles/${post.shortId || post.id}`;
@@ -417,7 +419,7 @@ export default function PostCard({ post, index, onDelete }: PostCardProps) {
         )}
 
         {!isArticle && (post.video ? (
-          <VideoPlayer video={post.video} postId={post.id} />
+          <VideoPlayer video={post.video} postId={post.id} fullWidth={fillEmbeds} />
         ) : (
           <ImageGrid images={normalizeImages(post.images)} />
         ))}
@@ -426,7 +428,9 @@ export default function PostCard({ post, index, onDelete }: PostCardProps) {
         {isArticle && (
           <Link
             href={articleDetailUrl}
-            className="mt-2 flex w-full max-w-[240px] items-stretch overflow-hidden rounded-[8px] bg-[#f2f2f2] transition-colors hover:bg-[#eaeaea] active:bg-[#e0e0e0] dark:bg-[#2a2a30] dark:hover:bg-[#33333a] dark:active:bg-[#3a3a42] md:max-w-[280px]"
+            className={`mt-2 flex w-full items-stretch overflow-hidden rounded-[8px] bg-[#f2f2f2] transition-colors hover:bg-[#eaeaea] active:bg-[#e0e0e0] dark:bg-[#2a2a30] dark:hover:bg-[#33333a] dark:active:bg-[#3a3a42] ${
+              fillEmbeds ? "max-w-none" : "max-w-[240px] md:max-w-[280px]"
+            }`}
           >
             {/* 左侧方形封面 */}
             <div className="relative h-[72px] w-[72px] shrink-0 md:h-[80px] md:w-[80px] overflow-hidden bg-black/5 dark:bg-white/5">
@@ -462,7 +466,9 @@ export default function PostCard({ post, index, onDelete }: PostCardProps) {
             href={post.linkCard.url}
             target="_blank"
             rel="noopener noreferrer"
-            className="mt-2 flex w-full max-w-[240px] items-stretch overflow-hidden rounded-[8px] bg-[#f2f2f2] transition-colors hover:bg-[#eaeaea] active:bg-[#e0e0e0] dark:bg-[#2a2a30] dark:hover:bg-[#33333a] dark:active:bg-[#3a3a42] md:max-w-[280px]"
+            className={`mt-2 flex w-full items-stretch overflow-hidden rounded-[8px] bg-[#f2f2f2] transition-colors hover:bg-[#eaeaea] active:bg-[#e0e0e0] dark:bg-[#2a2a30] dark:hover:bg-[#33333a] dark:active:bg-[#3a3a42] ${
+              fillEmbeds ? "max-w-none" : "max-w-[240px] md:max-w-[280px]"
+            }`}
           >
             {/* 左侧方形封面 */}
             <div className="flex h-[72px] w-[72px] shrink-0 md:h-[80px] md:w-[80px] items-center justify-center overflow-hidden bg-black/[0.02] dark:bg-white/[0.02]">
@@ -497,7 +503,9 @@ export default function PostCard({ post, index, onDelete }: PostCardProps) {
         {!isArticle && post.music && (
           <div
             onClick={handleMusicClick}
-            className="mt-2 flex w-full max-w-[240px] cursor-pointer items-stretch overflow-hidden rounded-[8px] bg-[#f2f2f2] transition-opacity active:opacity-80 dark:bg-[#2a2a30] md:max-w-[280px]"
+            className={`mt-2 flex w-full cursor-pointer items-stretch overflow-hidden rounded-[8px] bg-[#f2f2f2] transition-opacity active:opacity-80 dark:bg-[#2a2a30] ${
+              fillEmbeds ? "max-w-none" : "max-w-[240px] md:max-w-[280px]"
+            }`}
           >
             {/* 左侧方形封面 — 紧贴边框，无间距，高度增加 */}
             <div className="relative h-[72px] w-[72px] shrink-0 md:h-[80px] md:w-[80px] overflow-hidden bg-black/5 dark:bg-white/5">
@@ -544,7 +552,11 @@ export default function PostCard({ post, index, onDelete }: PostCardProps) {
 
         {/* Douban card — 豆瓣影单卡片，与链接卡片/音乐卡片同层级、同样式 */}
         {!isArticle && post.douban && (
-          <DoubanEmbedCard item={post.douban} variant="feed" />
+          <DoubanEmbedCard
+            item={post.douban}
+            className={fillEmbeds ? "!max-w-none" : undefined}
+            variant="feed"
+          />
         )}
 
         {/* Location — 显示在时间上方，格式：城市 · 地点名 */}

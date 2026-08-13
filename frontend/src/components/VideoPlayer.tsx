@@ -95,9 +95,11 @@ interface VideoPlayerProps {
   video: PostVideo;
   /** 动态 ID，用于解析后回写后端持久化最新视频数据 */
   postId?: string;
+  /** 首页动态使用：让视频填满动态内容栏；详情页继续使用紧凑宽度。 */
+  fullWidth?: boolean;
 }
 
-export default function VideoPlayer({ video, postId }: VideoPlayerProps) {
+export default function VideoPlayer({ video, postId, fullWidth = false }: VideoPlayerProps) {
   const [modalOpen, setModalOpen] = useState(false);
   // local state：Modal 解析成功后更新，让卡片信息跟着刷新
   const [videoData, setVideoData] = useState<PostVideo>(video);
@@ -116,7 +118,7 @@ export default function VideoPlayer({ video, postId }: VideoPlayerProps) {
     const isBilibili = /bilibili\.com|player\.bilibili/i.test(src);
     if (!isBilibili) return null;
 
-    return <BilibiliEmbed rawSrc={src} video={video} />;
+    return <BilibiliEmbed rawSrc={src} video={video} fullWidth={fullWidth} />;
   }
 
   // ── 解析视频：尝试内联自动播放，URL 失效则回退到封面+弹窗 ──
@@ -126,6 +128,7 @@ export default function VideoPlayer({ video, postId }: VideoPlayerProps) {
         <ParsedInlineVideo
           video={videoData}
           postId={postId}
+          fullWidth={fullWidth}
           onOpenModal={() => setModalOpen(true)}
           onRefreshed={handleRefreshed}
         />
@@ -142,18 +145,18 @@ export default function VideoPlayer({ video, postId }: VideoPlayerProps) {
   }
 
   // ── 上传/直链视频：内联播放（URL 不过期）──
-  return <InlineVideo video={videoData} />;
+  return <InlineVideo video={videoData} fullWidth={fullWidth} />;
 }
 
 /** 上传/直链视频的内联播放器（使用 CustomVideoPlayer 统一体验） */
-function InlineVideo({ video }: { video: PostVideo }) {
+function InlineVideo({ video, fullWidth }: { video: PostVideo; fullWidth: boolean }) {
   const directUrl = toAbsoluteUrl(video.url || "");
   const cover = video.cover ? toAbsoluteUrl(video.cover) : undefined;
   const containerRef = useRef<HTMLDivElement>(null);
   useAutoplayOnVisible(containerRef);
 
   return (
-    <div ref={containerRef} className="mt-2 max-w-[300px]">
+    <div ref={containerRef} className={fullWidth ? "mt-2 w-full" : "mt-2 max-w-[300px]"}>
       <CustomVideoPlayer
         src={directUrl}
         poster={cover}
@@ -166,7 +169,7 @@ function InlineVideo({ video }: { video: PostVideo }) {
 }
 
 /** B 站嵌入：进入视口时加载带 autoplay=1 的 iframe，离开时暂停（重新加载 autoplay=0） */
-function BilibiliEmbed({ rawSrc, video }: { rawSrc: string; video: PostVideo }) {
+function BilibiliEmbed({ rawSrc, video, fullWidth }: { rawSrc: string; video: PostVideo; fullWidth: boolean }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const { visible } = useAutoplayOnVisible(containerRef, { threshold: 0.5 });
 
@@ -186,7 +189,10 @@ function BilibiliEmbed({ rawSrc, video }: { rawSrc: string; video: PostVideo }) 
   }, [rawSrc, visible]);
 
   return (
-    <div ref={containerRef} className="mt-2 max-w-[340px] md:max-w-[500px]">
+    <div
+      ref={containerRef}
+      className={fullWidth ? "mt-2 w-full" : "mt-2 max-w-[340px] md:max-w-[500px]"}
+    >
       <div
         className="relative w-full overflow-hidden rounded-lg bg-black"
         style={{ paddingBottom: "56.25%" }}
@@ -220,11 +226,12 @@ function BilibiliEmbed({ rawSrc, video }: { rawSrc: string; video: PostVideo }) 
 interface ParsedInlineVideoProps {
   video: PostVideo;
   postId?: string;
+  fullWidth: boolean;
   onOpenModal: () => void;
   onRefreshed: (fresh: PostVideo) => void;
 }
 
-function ParsedInlineVideo({ video, postId, onOpenModal, onRefreshed }: ParsedInlineVideoProps) {
+function ParsedInlineVideo({ video, postId, fullWidth, onOpenModal, onRefreshed }: ParsedInlineVideoProps) {
   const directUrl = toAbsoluteUrl(video.url || "");
   const cover = video.cover ? toAbsoluteUrl(video.cover) : undefined;
   const containerRef = useRef<HTMLDivElement>(null);
@@ -234,7 +241,10 @@ function ParsedInlineVideo({ video, postId, onOpenModal, onRefreshed }: ParsedIn
   // URL 失效：回退到封面缩略图 + 播放按钮
   if (fallbackToThumbnail || !directUrl) {
     return (
-      <div ref={containerRef} className="mt-2 max-w-[300px] md:max-w-[360px]">
+      <div
+        ref={containerRef}
+        className={fullWidth ? "mt-2 w-full" : "mt-2 max-w-[300px] md:max-w-[360px]"}
+      >
         <button
           type="button"
           onClick={onOpenModal}
@@ -268,7 +278,10 @@ function ParsedInlineVideo({ video, postId, onOpenModal, onRefreshed }: ParsedIn
   }
 
   return (
-    <div ref={containerRef} className="mt-2 max-w-[300px] md:max-w-[360px]">
+    <div
+      ref={containerRef}
+      className={fullWidth ? "mt-2 w-full" : "mt-2 max-w-[300px] md:max-w-[360px]"}
+    >
       <CustomVideoPlayer
         src={directUrl}
         poster={cover}
