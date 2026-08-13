@@ -2,7 +2,15 @@
 
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
-import { PenLine, Trash2, Loader2, FileText, ExternalLink, Pin, PinOff } from "lucide-react";
+import {
+  PenLine,
+  Trash2,
+  Loader2,
+  FileText,
+  ExternalLink,
+  Pin,
+  PinOff,
+} from "lucide-react";
 import { apiFetch } from "@/lib/api-fetch";
 import { toAbsoluteUrl } from "@/lib/upload";
 import { formatArticleTime } from "@/lib/mock-data";
@@ -74,7 +82,7 @@ export default function AdminArticlesPage() {
         setDeleting(null);
       }
     },
-    []
+    [],
   );
 
   const handlePin = useCallback(
@@ -89,7 +97,9 @@ export default function AdminArticlesPage() {
         if (!res.ok) throw new Error("操作失败");
         const data = await res.json();
         setArticles((prev) =>
-          prev.map((a) => (a.id === id ? { ...a, pinned: !!data.pinned } : a))
+          prev.map((a) =>
+            a.id === id ? { ...a, pinned: !!data.pinned } : a,
+          ),
         );
       } catch (err) {
         alert(err instanceof Error ? err.message : "操作失败");
@@ -97,22 +107,22 @@ export default function AdminArticlesPage() {
         setPinning(null);
       }
     },
-    []
+    [],
   );
 
   return (
-    <div className="mx-auto max-w-5xl px-4 py-6">
+    <div className="mx-auto max-w-5xl py-1 sm:px-4 sm:py-6">
       {/* Header */}
-      <div className="mb-6 flex items-center justify-between">
-        <div>
+      <div className="mb-4 flex items-center justify-between gap-3 sm:mb-6">
+        <div className="min-w-0">
           <h1 className="text-xl font-bold text-adm-text">文章管理</h1>
-          <p className="mt-0.5 text-sm text-adm-text-secondary">
+          <p className="mt-0.5 truncate text-sm text-adm-text-secondary">
             管理已发布与草稿文章
           </p>
         </div>
         <Link
           href="/admin/articles/new"
-          className="flex items-center gap-1.5 rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-gray-700 dark:bg-white dark:text-gray-900 dark:hover:bg-gray-200"
+          className="flex shrink-0 items-center gap-1.5 rounded-lg bg-gray-900 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-gray-700 sm:px-4 dark:bg-white dark:text-gray-900 dark:hover:bg-gray-200"
         >
           <PenLine className="h-4 w-4" />
           写文章
@@ -143,115 +153,90 @@ export default function AdminArticlesPage() {
             {articles.map((article) => (
               <div
                 key={article.id}
-                className="flex gap-4 rounded-xl border border-adm-border bg-adm-card p-4 transition-colors hover:bg-adm-card-hover"
+                className="overflow-hidden rounded-xl border border-adm-border bg-adm-card transition-colors hover:bg-adm-card-hover"
               >
-                {/* Cover */}
-                <div className="h-20 w-32 shrink-0 overflow-hidden rounded-lg bg-adm-input">
-                  {article.cover || defaultCover ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={toAbsoluteUrl(article.cover || defaultCover)}
-                      alt={article.title}
-                      className="h-full w-full object-cover"
-                      loading="lazy"
-                    />
-                  ) : (
-                    <div className="flex h-full w-full items-center justify-center">
-                      <FileText className="h-6 w-6 text-adm-text-tertiary" />
-                    </div>
-                  )}
-                </div>
+                <div className="flex gap-3 p-3 sm:gap-4 sm:p-4">
+                  {/* Cover */}
+                  <div className="h-[72px] w-24 shrink-0 overflow-hidden rounded-lg bg-adm-input sm:h-20 sm:w-32">
+                    {article.cover || defaultCover ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={toAbsoluteUrl(article.cover || defaultCover)}
+                        alt={article.title}
+                        className="h-full w-full object-cover"
+                        loading="lazy"
+                      />
+                    ) : (
+                      <div className="flex h-full w-full items-center justify-center">
+                        <FileText className="h-6 w-6 text-adm-text-tertiary" />
+                      </div>
+                    )}
+                  </div>
 
-                {/* Info */}
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2">
-                        <h3 className="truncate font-medium text-adm-text">
+                  {/* Info */}
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0 flex-1">
+                        <h3 className="line-clamp-2 text-sm font-medium leading-5 text-adm-text sm:truncate sm:text-base">
                           {article.title || "无标题"}
                         </h3>
-                        {ARTICLE_TYPE_BADGE[article.articleType] && (
-                          <span className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium ${ARTICLE_TYPE_BADGE[article.articleType].cls}`}>
-                            {ARTICLE_TYPE_BADGE[article.articleType].label}
-                          </span>
-                        )}
-                        {article.status === "draft" && (
-                          <span className="shrink-0 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:bg-amber-500/15 dark:text-amber-400">
-                            草稿
-                          </span>
-                        )}
-                        {article.pinned && (
-                          <span className="shrink-0 rounded bg-green-50 px-1.5 py-0.5 text-[10px] font-medium text-green-600 dark:bg-green-500/15 dark:text-green-400">
-                            置顶
-                          </span>
-                        )}
-                      </div>
-                      <p className="mt-1 line-clamp-2 text-sm text-adm-text-secondary">
-                        {article.excerpt || article.content || "无摘要"}
-                      </p>
-                      <div className="mt-2 flex items-center gap-2 text-xs text-adm-text-tertiary">
-                        {article.category && (
-                          <span className="rounded bg-adm-input px-1.5 py-0.5">
-                            {article.category}
-                          </span>
-                        )}
-                        <span>
-                          {formatArticleTime(article.createdAt)}
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Actions */}
-                    <div className="flex shrink-0 items-center gap-1">
-                      {article.status === "published" && (
-                        <Link
-                          href={`/articles/${article.shortId || article.id}`}
-                          target="_blank"
-                          className="flex h-8 w-8 items-center justify-center rounded-lg text-adm-text-secondary transition-colors hover:bg-adm-input hover:text-adm-text"
-                          title="查看文章"
-                        >
-                          <ExternalLink className="h-4 w-4" />
-                        </Link>
-                      )}
-                      {article.status === "published" && (
-                        <button
-                          type="button"
-                          onClick={() => handlePin(article.id, !!article.pinned)}
-                          disabled={pinning === article.id}
-                          className="flex h-8 w-8 items-center justify-center rounded-lg text-adm-text-secondary transition-colors hover:bg-adm-input hover:text-adm-text disabled:opacity-50"
-                          title={article.pinned ? "取消置顶" : "置顶"}
-                        >
-                          {pinning === article.id ? (
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                          ) : article.pinned ? (
-                            <PinOff className="h-4 w-4" />
-                          ) : (
-                            <Pin className="h-4 w-4" />
+                        <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                          {ARTICLE_TYPE_BADGE[article.articleType] && (
+                            <span
+                              className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium ${ARTICLE_TYPE_BADGE[article.articleType].cls}`}
+                            >
+                              {ARTICLE_TYPE_BADGE[article.articleType].label}
+                            </span>
                           )}
-                        </button>
-                      )}
-                      <Link
-                        href={`/admin/articles/${article.id}`}
-                        className="flex h-8 w-8 items-center justify-center rounded-lg text-adm-text-secondary transition-colors hover:bg-adm-input hover:text-adm-text"
-                        title="编辑"
-                      >
-                        <PenLine className="h-4 w-4" />
-                      </Link>
-                      <button
-                        type="button"
-                        onClick={() => handleDelete(article.id)}
-                        disabled={deleting === article.id}
-                        className="flex h-8 w-8 items-center justify-center rounded-lg text-adm-text-secondary transition-colors hover:bg-red-50 hover:text-red-500 disabled:opacity-50 dark:hover:bg-red-500/10"
-                        title="删除"
-                      >
-                        {deleting === article.id ? (
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                        ) : (
-                          <Trash2 className="h-4 w-4" />
-                        )}
-                      </button>
+                          {article.status === "draft" && (
+                            <span className="shrink-0 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:bg-amber-500/15 dark:text-amber-400">
+                              草稿
+                            </span>
+                          )}
+                          {article.pinned && (
+                            <span className="shrink-0 rounded bg-green-50 px-1.5 py-0.5 text-[10px] font-medium text-green-600 dark:bg-green-500/15 dark:text-green-400">
+                              置顶
+                            </span>
+                          )}
+                        </div>
+                        <p className="mt-1.5 hidden line-clamp-2 text-sm text-adm-text-secondary sm:block">
+                          {article.excerpt || article.content || "无摘要"}
+                        </p>
+                        <div className="mt-1.5 flex min-w-0 flex-wrap items-center gap-1.5 text-[11px] text-adm-text-tertiary sm:mt-2 sm:gap-2 sm:text-xs">
+                          {article.category && (
+                            <span className="max-w-24 truncate rounded bg-adm-input px-1.5 py-0.5">
+                              {article.category}
+                            </span>
+                          )}
+                          <span className="whitespace-nowrap">
+                            {formatArticleTime(article.createdAt)}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="hidden sm:block">
+                        <ArticleActions
+                          article={article}
+                          deleting={deleting}
+                          pinning={pinning}
+                          onDelete={handleDelete}
+                          onPin={handlePin}
+                        />
+                      </div>
                     </div>
                   </div>
+                </div>
+
+                {/* Mobile actions */}
+                <div className="border-t border-adm-border bg-adm-card-hover/30 px-2 py-1.5 sm:hidden">
+                  <ArticleActions
+                    article={article}
+                    deleting={deleting}
+                    pinning={pinning}
+                    onDelete={handleDelete}
+                    onPin={handlePin}
+                    mobile
+                  />
                 </div>
               </div>
             ))}
@@ -291,6 +276,82 @@ export default function AdminArticlesPage() {
           )}
         </>
       )}
+    </div>
+  );
+}
+
+function ArticleActions({
+  article,
+  deleting,
+  pinning,
+  onDelete,
+  onPin,
+  mobile = false,
+}: {
+  article: ArticleListItem;
+  deleting: string | null;
+  pinning: string | null;
+  onDelete: (id: string) => void;
+  onPin: (id: string, currentPinned: boolean) => void;
+  mobile?: boolean;
+}) {
+  const actionClass = mobile
+    ? "flex min-w-0 flex-1 items-center justify-center gap-1 rounded-lg px-1 py-2 text-[11px] text-adm-text-secondary transition-colors hover:bg-adm-input hover:text-adm-text disabled:opacity-50"
+    : "flex h-8 w-8 items-center justify-center rounded-lg text-adm-text-secondary transition-colors hover:bg-adm-input hover:text-adm-text disabled:opacity-50";
+
+  return (
+    <div className="flex items-center gap-1">
+      {article.status === "published" && (
+        <Link
+          href={`/articles/${article.shortId || article.id}`}
+          target="_blank"
+          className={actionClass}
+          title="查看文章"
+        >
+          <ExternalLink className="h-4 w-4 shrink-0" />
+          {mobile && <span>查看</span>}
+        </Link>
+      )}
+      {article.status === "published" && (
+        <button
+          type="button"
+          onClick={() => onPin(article.id, !!article.pinned)}
+          disabled={pinning === article.id}
+          className={actionClass}
+          title={article.pinned ? "取消置顶" : "置顶"}
+        >
+          {pinning === article.id ? (
+            <Loader2 className="h-4 w-4 shrink-0 animate-spin" />
+          ) : article.pinned ? (
+            <PinOff className="h-4 w-4 shrink-0" />
+          ) : (
+            <Pin className="h-4 w-4 shrink-0" />
+          )}
+          {mobile && <span>{article.pinned ? "取消置顶" : "置顶"}</span>}
+        </button>
+      )}
+      <Link
+        href={`/admin/articles/${article.id}`}
+        className={actionClass}
+        title="编辑"
+      >
+        <PenLine className="h-4 w-4 shrink-0" />
+        {mobile && <span>编辑</span>}
+      </Link>
+      <button
+        type="button"
+        onClick={() => onDelete(article.id)}
+        disabled={deleting === article.id}
+        className={`${actionClass} hover:bg-red-50 hover:text-red-500 dark:hover:bg-red-500/10`}
+        title="删除"
+      >
+        {deleting === article.id ? (
+          <Loader2 className="h-4 w-4 shrink-0 animate-spin" />
+        ) : (
+          <Trash2 className="h-4 w-4 shrink-0" />
+        )}
+        {mobile && <span>{deleting === article.id ? "删除中" : "删除"}</span>}
+      </button>
     </div>
   );
 }

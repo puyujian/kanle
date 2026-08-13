@@ -279,7 +279,7 @@ export default function ArticleEditorPage({ articleId }: ArticleEditorPageProps)
   return (
     <div className="mx-auto max-w-[1400px] px-4 py-4 lg:flex lg:h-[calc(100dvh-100px)] lg:flex-col lg:overflow-hidden lg:py-0">
       {/* 顶部一行：返回 + 标题 + 草稿 + 发布按钮 — 移动端吸顶，桌面端固定不滚动 */}
-      <div className="sticky top-14 z-20 -mx-4 mb-3 flex items-center gap-2 bg-adm-bg px-4 py-2 lg:static lg:z-auto lg:mb-0 lg:shrink-0 lg:border-b lg:border-adm-border lg:py-2.5">
+      <div className="sticky top-14 z-20 -mx-4 mb-3 flex flex-wrap items-center gap-2 border-b border-adm-border bg-adm-bg/95 px-4 py-2 backdrop-blur-xl lg:static lg:z-auto lg:mb-0 lg:shrink-0 lg:flex-nowrap lg:bg-adm-bg lg:py-2.5 lg:backdrop-blur-none">
         <button
           type="button"
           onClick={handleBack}
@@ -294,26 +294,33 @@ export default function ArticleEditorPage({ articleId }: ArticleEditorPageProps)
           onChange={(e) => setTitle(e.target.value)}
           placeholder="标题"
           maxLength={200}
-          className="min-w-0 flex-1 rounded-xl border border-adm-border bg-adm-card px-4 py-2.5 text-lg font-bold text-adm-text placeholder:text-adm-text-tertiary focus:outline-none focus:ring-2 focus:ring-gray-400/30 dark:bg-[#1e1e22]"
+          className="min-w-0 flex-1 rounded-xl border border-adm-border bg-adm-card px-3 py-2.5 text-base font-bold text-adm-text placeholder:text-adm-text-tertiary focus:outline-none focus:ring-2 focus:ring-gray-400/30 sm:px-4 sm:text-lg dark:bg-[#1e1e22]"
         />
-        <button
-          type="button"
-          onClick={() => handleSave("draft")}
-          disabled={saving !== null}
-          className="flex shrink-0 items-center gap-1.5 rounded-lg border border-adm-border bg-adm-card px-4 py-2.5 text-sm font-medium text-adm-text-secondary transition-colors hover:bg-adm-card-hover disabled:cursor-not-allowed disabled:opacity-50 dark:bg-[#1e1e22]"
-        >
-          {saving === "draft" ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-          保存草稿
-        </button>
-        <button
-          type="button"
-          onClick={() => handleSave("published")}
-          disabled={saving !== null || !title.trim()}
-          className="flex shrink-0 items-center gap-1.5 rounded-lg bg-gray-900 px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-gray-700 disabled:cursor-not-allowed disabled:bg-gray-300 disabled:text-gray-500 dark:bg-white dark:text-gray-900 dark:hover:bg-gray-200 dark:disabled:bg-white/10 dark:disabled:text-gray-600"
-        >
-          {saving === "published" ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-          {isEdit ? "保存" : "发布"}
-        </button>
+        <div className="flex w-full items-center gap-2 pl-12 lg:contents lg:w-auto lg:pl-0">
+          <button
+            type="button"
+            onClick={() => handleSave("draft")}
+            disabled={saving !== null}
+            className="flex min-w-0 flex-1 items-center justify-center gap-1.5 rounded-lg border border-adm-border bg-adm-card px-3 py-2 text-sm font-medium text-adm-text-secondary transition-colors hover:bg-adm-card-hover disabled:cursor-not-allowed disabled:opacity-50 sm:flex-none sm:px-4 sm:py-2.5 dark:bg-[#1e1e22]"
+          >
+            {saving === "draft" ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : null}
+            <span className="sm:hidden">存草稿</span>
+            <span className="hidden sm:inline">保存草稿</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => handleSave("published")}
+            disabled={saving !== null || !title.trim()}
+            className="flex min-w-0 flex-1 items-center justify-center gap-1.5 rounded-lg bg-gray-900 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-gray-700 disabled:cursor-not-allowed disabled:bg-gray-300 disabled:text-gray-500 sm:flex-none sm:px-5 sm:py-2.5 dark:bg-white dark:text-gray-900 dark:hover:bg-gray-200 dark:disabled:bg-white/10 dark:disabled:text-gray-600"
+          >
+            {saving === "published" ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : null}
+            {isEdit ? "保存" : "发布"}
+          </button>
+        </div>
       </div>
 
       {/* 文章类型选择 */}
@@ -341,7 +348,7 @@ export default function ArticleEditorPage({ articleId }: ArticleEditorPageProps)
         </div>
         {/* 转载链接输入框 */}
         {articleType === "repost" && (
-          <div className="flex min-w-0 flex-1 items-center gap-1.5">
+          <div className="flex min-w-0 basis-full items-center gap-1.5 sm:flex-1 sm:basis-auto">
             <Link2 className="h-3.5 w-3.5 shrink-0 text-adm-text-tertiary" />
             <input
               type="url"
@@ -388,7 +395,8 @@ export default function ArticleEditorPage({ articleId }: ArticleEditorPageProps)
                   <button
                     type="button"
                     onClick={() => setCover("")}
-                    className="absolute right-1 top-1 rounded bg-black/60 p-1 text-white opacity-0 transition-opacity group-hover:opacity-100"
+                    className="absolute right-1 top-1 rounded bg-black/60 p-1 text-white opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100"
+                    aria-label="移除封面"
                   >
                     <X className="h-4 w-4" />
                   </button>
