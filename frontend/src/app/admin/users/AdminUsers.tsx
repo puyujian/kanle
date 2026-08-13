@@ -19,6 +19,7 @@ import {
   Library,
   Plus,
   Trash2,
+  GripVertical,
 } from "lucide-react";
 import { uploadImage, toAbsoluteUrl } from "@/lib/upload";
 import { resolveAvatar } from "@/lib/avatar";
@@ -161,6 +162,9 @@ function BackgroundImagesEditor({
   const [uploading, setUploading] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [urlInput, setUrlInput] = useState("");
+  const [dragIndex, setDragIndex] = useState<number | null>(null);
+  const [overIndex, setOverIndex] = useState<number | null>(null);
+  const dragTargetRef = useRef<number | null>(null);
 
   const handleFile = async (file: File) => {
     setUploading(true);
@@ -185,37 +189,116 @@ function BackgroundImagesEditor({
     onChange(images.filter((_, i) => i !== idx));
   };
 
+  const reorder = (from: number, to: number) => {
+    if (from === to) return;
+    const next = [...images];
+    const [moved] = next.splice(from, 1);
+    next.splice(to, 0, moved);
+    onChange(next);
+  };
+
+  const resetDrag = () => {
+    setDragIndex(null);
+    setOverIndex(null);
+    dragTargetRef.current = null;
+  };
+
   return (
     <div className="space-y-3">
       {/* 已添加的图片网格 */}
       {images.length > 0 && (
         <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
-          {images.map((url, idx) => (
-            <div
-              key={`${url}-${idx}`}
-              className="group relative aspect-video overflow-hidden rounded-lg border border-adm-border bg-adm-input"
-            >
-              <Image
-                src={toAbsoluteUrl(url)}
-                alt={`背景图 ${idx + 1}`}
-                fill
-                className="object-cover"
-                sizes="120px"
-              />
-              <button
-                type="button"
-                onClick={() => removeAt(idx)}
-                className="absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-full bg-black/60 text-white opacity-0 transition-opacity group-hover:opacity-100 hover:bg-black/80"
-                title="删除"
+          {images.map((url, idx) => {
+            const isDragging = dragIndex === idx;
+            const isOver = overIndex === idx && dragIndex !== idx;
+
+            return (
+              <div
+                key={`${url}-${idx}`}
+                data-background-image-index={idx}
+                className={`group relative aspect-video overflow-hidden rounded-lg border-2 bg-adm-input transition-[border-color,opacity,transform] ${
+                  isDragging
+                    ? "scale-95 border-adm-primary opacity-50"
+                    : isOver
+                      ? "border-adm-primary"
+                      : "border-adm-border"
+                }`}
               >
-                <Trash2 className="h-3.5 w-3.5" />
-              </button>
-              <span className="absolute bottom-1 left-1 rounded bg-black/60 px-1.5 py-0.5 text-[10px] text-white">
-                {idx + 1}
-              </span>
-            </div>
-          ))}
+                <Image
+                  src={toAbsoluteUrl(url)}
+                  alt={`背景图 ${idx + 1}`}
+                  fill
+                  className="object-cover"
+                  sizes="120px"
+                  draggable={false}
+                />
+                <button
+                  type="button"
+                  className="absolute left-1 top-1 flex h-7 w-7 touch-none select-none items-center justify-center rounded-md bg-black/60 text-white shadow-sm transition-colors hover:bg-black/80 active:cursor-grabbing"
+                  title="按住并滑动排序"
+                  aria-label={`移动背景图 ${idx + 1}`}
+                  onPointerDown={(e) => {
+                    if (!e.isPrimary) return;
+                    e.preventDefault();
+                    e.currentTarget.setPointerCapture(e.pointerId);
+                    dragTargetRef.current = idx;
+                    setDragIndex(idx);
+                    setOverIndex(idx);
+                  }}
+                  onPointerMove={(e) => {
+                    if (dragIndex !== idx || !e.isPrimary) return;
+                    const target = document
+                      .elementFromPoint(e.clientX, e.clientY)
+                      ?.closest<HTMLElement>(
+                        "[data-background-image-index]",
+                      );
+                    const targetIndex = Number(
+                      target?.dataset.backgroundImageIndex,
+                    );
+                    if (
+                      Number.isInteger(targetIndex) &&
+                      targetIndex >= 0 &&
+                      targetIndex < images.length &&
+                      dragTargetRef.current !== targetIndex
+                    ) {
+                      dragTargetRef.current = targetIndex;
+                      setOverIndex(targetIndex);
+                    }
+                  }}
+                  onPointerUp={(e) => {
+                    if (dragIndex !== idx || !e.isPrimary) return;
+                    const targetIndex = dragTargetRef.current;
+                    if (targetIndex !== null) reorder(idx, targetIndex);
+                    resetDrag();
+                  }}
+                  onPointerCancel={resetDrag}
+                  onLostPointerCapture={() => {
+                    if (dragIndex === idx) resetDrag();
+                  }}
+                >
+                  <GripVertical className="h-4 w-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => removeAt(idx)}
+                  className="absolute right-1 top-1 flex h-7 w-7 items-center justify-center rounded-full bg-black/60 text-white opacity-100 transition-opacity hover:bg-black/80 sm:opacity-0 sm:group-hover:opacity-100"
+                  title="删除"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </button>
+                <span className="absolute bottom-1 left-1 rounded bg-black/60 px-1.5 py-0.5 text-[10px] text-white">
+                  {idx + 1}
+                </span>
+              </div>
+            );
+          })}
         </div>
+      )}
+
+      {images.length > 1 && (
+        <p className="text-xs text-adm-text-tertiary">
+          按住图片左上角的拖动按钮，滑动到目标位置即可排序
+        </p>
       )}
 
       {/* 添加新图片：URL 输入 + 上传 + 媒体库 */}
