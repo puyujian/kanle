@@ -2,7 +2,14 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Trash2, Pin, PinOff, Heart, MessageSquare } from "lucide-react";
+import {
+  Trash2,
+  Pin,
+  PinOff,
+  Heart,
+  MessageSquare,
+  Loader2,
+} from "lucide-react";
 import { apiFetch, getToken } from "@/lib/api-fetch";
 import { Post } from "@/lib/mock-data";
 import PostCard from "@/components/PostCard";
@@ -71,7 +78,9 @@ export default function AdminPosts() {
       if (res.ok) {
         const data = await res.json();
         setPosts((prev) =>
-          prev.map((p) => (p.id === id ? { ...p, pinned: !!data.pinned } : p))
+          prev.map((p) =>
+            p.id === id ? { ...p, pinned: !!data.pinned } : p,
+          ),
         );
       } else {
         alert("操作失败");
@@ -86,10 +95,10 @@ export default function AdminPosts() {
   const handleTogglePermission = async (
     id: string,
     field: "likesDisabled" | "commentsDisabled",
-    current: boolean
+    current: boolean,
   ) => {
     if (!token) return;
-    setPermId(id);
+    setPermId(`${id}:${field}`);
     try {
       const res = await apiFetch(`/posts/${id}`, {
         method: "PUT",
@@ -122,10 +131,13 @@ export default function AdminPosts() {
 
   return (
     <div className="space-y-3">
-      <div>
+      <div className="min-w-0">
         <h2 className="text-lg font-bold text-adm-text">动态管理</h2>
-        <p className="mt-1 text-sm text-adm-text-secondary">
-          共 {posts.length} 条动态（发布请使用顶栏「发表动态」按钮）
+        <p className="mt-1 text-sm leading-5 text-adm-text-secondary">
+          共 {posts.length} 条动态
+          <span className="hidden sm:inline">
+            （发布请使用顶栏「发表动态」按钮）
+          </span>
         </p>
       </div>
 
@@ -134,10 +146,15 @@ export default function AdminPosts() {
           <p className="text-sm text-adm-text-tertiary">暂无动态</p>
         </div>
       ) : (
-        <div className="gap-3 sm:columns-2">
+        <div className="gap-3 lg:columns-2">
           {posts.map((post, index) => (
-            <div key={post.id} className="mb-3 break-inside-avoid overflow-hidden rounded-2xl border border-adm-border bg-adm-card">
-              <PostCard post={post} index={index} onDelete={() => handleDelete(post.id)} />
+            <div
+              key={post.id}
+              className="mb-3 break-inside-avoid overflow-hidden rounded-xl border border-adm-border bg-adm-card sm:rounded-2xl"
+            >
+              <div className="[&>article]:px-3 [&>article]:py-3 sm:[&>article]:px-5 sm:[&>article]:py-4">
+                <PostCard post={post} index={index} />
+              </div>
               <ActionBar
                 post={post}
                 permId={permId}
@@ -171,54 +188,90 @@ function ActionBar({
   deletingId: string | null;
   onDelete: (id: string) => void;
   onPin: (id: string, pinned: boolean) => void;
-  onTogglePerm: (id: string, field: "likesDisabled" | "commentsDisabled", current: boolean) => void;
+  onTogglePerm: (
+    id: string,
+    field: "likesDisabled" | "commentsDisabled",
+    current: boolean,
+  ) => void;
 }) {
+  const permissionBusy = permId?.startsWith(`${post.id}:`) ?? false;
+  const likeBusy = permId === `${post.id}:likesDisabled`;
+  const commentBusy = permId === `${post.id}:commentsDisabled`;
+  const pinBusy = pinningId === post.id;
+  const deleteBusy = deletingId === post.id;
+  const baseButton =
+    "flex min-w-0 items-center justify-center gap-1.5 rounded-lg px-2 py-2 text-xs font-medium transition-colors disabled:cursor-wait disabled:opacity-50 sm:px-3 sm:py-1.5";
+
   return (
-    <div className="flex flex-wrap items-center justify-end gap-2 border-t border-adm-border bg-adm-card-hover/40 px-4 py-2.5">
+    <div className="grid grid-cols-2 gap-1.5 border-t border-adm-border bg-adm-card-hover/40 p-2 sm:flex sm:flex-wrap sm:items-center sm:justify-end sm:gap-2 sm:px-4 sm:py-2.5">
       <button
+        type="button"
         onClick={() => onTogglePerm(post.id, "likesDisabled", !!post.likesDisabled)}
-        disabled={permId === post.id}
+        disabled={permissionBusy}
         title={post.likesDisabled ? "已关闭点赞，点击开启" : "允许点赞，点击关闭"}
-        className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors disabled:opacity-50 ${
+        className={`${baseButton} ${
           post.likesDisabled
-            ? "text-adm-danger bg-adm-danger-bg"
-            : "text-adm-text-secondary hover:bg-adm-card-hover"
+            ? "bg-adm-danger-bg text-adm-danger"
+            : "bg-adm-card text-adm-text-secondary hover:bg-adm-card-hover sm:bg-transparent"
         }`}
       >
-        <Heart className="h-3.5 w-3.5" />
+        {likeBusy ? (
+          <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" />
+        ) : (
+          <Heart className="h-3.5 w-3.5 shrink-0" />
+        )}
         {post.likesDisabled ? "点赞已关" : "允许点赞"}
       </button>
       <button
+        type="button"
         onClick={() => onTogglePerm(post.id, "commentsDisabled", !!post.commentsDisabled)}
-        disabled={permId === post.id}
+        disabled={permissionBusy}
         title={post.commentsDisabled ? "已关闭评论，点击开启" : "允许评论，点击关闭"}
-        className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors disabled:opacity-50 ${
+        className={`${baseButton} ${
           post.commentsDisabled
-            ? "text-adm-danger bg-adm-danger-bg"
-            : "text-adm-text-secondary hover:bg-adm-card-hover"
+            ? "bg-adm-danger-bg text-adm-danger"
+            : "bg-adm-card text-adm-text-secondary hover:bg-adm-card-hover sm:bg-transparent"
         }`}
       >
-        <MessageSquare className="h-3.5 w-3.5" />
+        {commentBusy ? (
+          <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" />
+        ) : (
+          <MessageSquare className="h-3.5 w-3.5 shrink-0" />
+        )}
         {post.commentsDisabled ? "评论已关" : "允许评论"}
       </button>
-      <div className="mx-1 h-4 w-px bg-adm-border" />
+      <div className="mx-1 hidden h-4 w-px bg-adm-border sm:block" />
       {!post.isAd && (
         <button
+          type="button"
           onClick={() => onPin(post.id, !!post.pinned)}
-          disabled={pinningId === post.id}
-          className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium text-adm-text-secondary transition-colors hover:bg-adm-card-hover disabled:opacity-50"
+          disabled={pinBusy}
+          className={`${baseButton} bg-adm-card text-adm-text-secondary hover:bg-adm-card-hover sm:bg-transparent`}
         >
-          {post.pinned ? <PinOff className="h-3.5 w-3.5" /> : <Pin className="h-3.5 w-3.5" />}
-          {pinningId === post.id ? "处理中..." : post.pinned ? "取消置顶" : "置顶动态"}
+          {pinBusy ? (
+            <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" />
+          ) : post.pinned ? (
+            <PinOff className="h-3.5 w-3.5 shrink-0" />
+          ) : (
+            <Pin className="h-3.5 w-3.5 shrink-0" />
+          )}
+          {pinBusy ? "处理中" : post.pinned ? "取消置顶" : "置顶动态"}
         </button>
       )}
       <button
+        type="button"
         onClick={() => onDelete(post.id)}
-        disabled={deletingId === post.id}
-        className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium text-adm-danger transition-colors hover:bg-adm-danger-bg disabled:opacity-50"
+        disabled={deleteBusy}
+        className={`${baseButton} bg-adm-card text-adm-danger hover:bg-adm-danger-bg sm:bg-transparent ${
+          post.isAd ? "col-span-2" : ""
+        }`}
       >
-        <Trash2 className="h-3.5 w-3.5" />
-        {deletingId === post.id ? "删除中..." : "删除动态"}
+        {deleteBusy ? (
+          <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" />
+        ) : (
+          <Trash2 className="h-3.5 w-3.5 shrink-0" />
+        )}
+        {deleteBusy ? "删除中" : "删除动态"}
       </button>
     </div>
   );
