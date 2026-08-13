@@ -102,7 +102,8 @@ router.get("/", async (req: Request, res: Response) => {
 
       const [likes, comments] = await Promise.all([
         Like.findAll({
-          where: { postId: postIds },
+          // 点赞采用软删除；取消点赞的记录不应继续生成通知。
+          where: { postId: postIds, status: "like" },
           order: [["createdAt", "DESC"]],
           limit: 200,
         }),

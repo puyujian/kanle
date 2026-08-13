@@ -197,32 +197,6 @@ export default function AdminNotifications({ variant = "mobile" }: AdminNotifica
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hasMore, page, loading, open]);
 
-  // sidebar 模式：列表可见 2 秒后自动标记已读（把当前可见通知 ID 全部加入已读集合）
-  useEffect(() => {
-    if (variant === "sidebar" && mounted && items.length > 0) {
-      const timer = setTimeout(() => {
-        const now = Date.now();
-        setLastReadAt(now);
-        localStorage.setItem("notifications_last_read", String(now));
-        setReadIds((prev) => {
-          const next = new Set(prev);
-          let changed = false;
-          items.forEach((n) => {
-            if (!next.has(n.id)) {
-              next.add(n.id);
-              changed = true;
-            }
-          });
-          if (changed) {
-            localStorage.setItem("notifications_read_ids", JSON.stringify([...next]));
-          }
-          return changed ? next : prev;
-        });
-      }, 2000);
-      return () => clearTimeout(timer);
-    }
-  }, [variant, mounted, items.length, items]);
-
   // 未登录不显示
   if (!mounted || !user?.isLoggedIn) return null;
 
@@ -407,7 +381,8 @@ export default function AdminNotifications({ variant = "mobile" }: AdminNotifica
   }
 
   // ====== Mobile 模式：按钮 + 弹窗（仅有未读消息时显示入口） ======
-  if (!loading && (items.length === 0 || unreadCount === 0)) return null;
+  // 请求完成并确认有未读消息后才显示入口，避免加载期间闪现“消息”按钮。
+  if (loading || items.length === 0 || unreadCount === 0) return null;
 
   const handleOpen = () => setOpen(true);
   const { closing, handleClose } = notifExit;
