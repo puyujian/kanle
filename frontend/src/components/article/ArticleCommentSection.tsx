@@ -4,7 +4,7 @@ import { useEffect, useLayoutEffect, useRef, useState, useCallback, useMemo } fr
 import { flushSync } from "react-dom";
 import { Comment, Post, formatRelativeTime } from "@/lib/mock-data";
 import { cravatarUrl } from "@/lib/avatar";
-import { findParentComment, findRootCommentId } from "@/lib/comment-utils";
+import { findRootCommentId } from "@/lib/comment-utils";
 import { getCurrentUser, CurrentUser } from "@/lib/auth";
 import { EMOJI_LIST, editableToShortcode, renderTextWithEmoji } from "@/lib/emoji";
 import { Smile, ThumbsUp, X, ChevronDown, ChevronUp } from "lucide-react";
@@ -50,6 +50,7 @@ export default function ArticleCommentSection({
   const [showEmoji, setShowEmoji] = useState(false);
   const [emojiExpanded, setEmojiExpanded] = useState(false);
   const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
   const [editing, setEditing] = useState(false);
   const [formNickname, setFormNickname] = useState("");
@@ -63,6 +64,7 @@ export default function ArticleCommentSection({
   const [inlineSubmitting, setInlineSubmitting] = useState(false);
   const [inlineShowEmoji, setInlineShowEmoji] = useState(false);
   const [inlineError, setInlineError] = useState("");
+  const [inlineNotice, setInlineNotice] = useState("");
   // 回复折叠状态：默认折叠，点击"N条回复"展开
   const [expandedThreads, setExpandedThreads] = useState<Set<string>>(new Set());
   const inlineEditorRef = useRef<HTMLDivElement>(null);
@@ -102,6 +104,7 @@ export default function ArticleCommentSection({
     if (target.replyTo || target.replyToId) {
       const rootId = findRootCommentId(target, comments);
       if (rootId) {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         setExpandedThreads((prev) => new Set(prev).add(rootId));
       }
     }
@@ -122,6 +125,7 @@ export default function ArticleCommentSection({
 
   useEffect(() => {
     const user = getCurrentUser();
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setCurrentUser(user);
     if (user && !user.isLoggedIn) {
       setFormNickname(user.nickname);
@@ -279,8 +283,9 @@ export default function ArticleCommentSection({
     replyToAuthor: string | undefined,
     replyToEmail: string,
     errorSetter: (msg: string) => void,
+    noticeSetter: (msg: string) => void,
     replyToId?: string
-  ): Promise<boolean> => {
+  ): Promise<"published" | "pending" | false> => {
     const trimmedText = text.trim();
     if (!trimmedText) return false;
 
@@ -305,6 +310,7 @@ export default function ArticleCommentSection({
     }
 
     errorSetter("");
+    noticeSetter("");
     try {
       const headers: Record<string, string> = { "Content-Type": "application/json" };
       if (currentUser?.isLoggedIn && currentUser.token) {
@@ -334,6 +340,10 @@ export default function ArticleCommentSection({
         return false;
       }
       const newComment = await res.json();
+      if (res.status === 202 || newComment.status === "pending") {
+        noticeSetter(newComment.message || "评论已提交，审核通过后显示");
+        return "pending";
+      }
       const updated = [...comments, newComment];
       onCommentsChange(updated);
       setCommentLikes((prev) => ({
@@ -354,7 +364,7 @@ export default function ArticleCommentSection({
           // 非关键操作
         }
       }
-      return true;
+      return "published";
     } catch {
       errorSetter("发送失败，请重试");
       return false;
@@ -379,17 +389,17 @@ export default function ArticleCommentSection({
     }
 
     setSubmitting(true);
-    const ok = await submitComment(text, replyToAuthor || undefined, replyToEmail, setError, replyTo);
+    const result = await submitComment(text, replyToAuthor || undefined, replyToEmail, setError, setNotice, replyTo);
     setSubmitting(false);
 
-    if (ok) {
+    if (result) {
       if (editorRef.current) {
         editorRef.current.innerHTML = "";
         editorRef.current.setAttribute("data-empty", "true");
       }
       setContent("");
       setReplyTo(undefined);
-      setExpanded(false);
+      if (result === "published") setExpanded(false);
     }
   };
 
@@ -405,29 +415,28 @@ export default function ArticleCommentSection({
       targetComment.author,
       targetComment.email || "",
       setInlineError,
+      setInlineNotice,
       targetComment.id
     );
     setInlineSubmitting(false);
     if (ok) {
-      // 自动展开所属线程，让新回复可见
-      if (targetComment.replyTo || targetComment.replyToId) {
-        // 回复的是子回复：向上找根评论并展开（用 findParentComment 避免同名歧义）
-        const rootId = findRootCommentId(targetComment, comments);
-        if (rootId) {
-          setExpandedThreads((prev) => new Set(prev).add(rootId));
-        }
-      } else {
-        // 回复的是顶级评论：直接展开
-        setExpandedThreads((prev) => new Set(prev).add(targetComment.id));
-      }
       if (editor) {
         editor.innerHTML = "";
         editor.setAttribute("data-empty", "true");
       }
       setInlineContent("");
-      setInlineReplyId(null);
-      setInlineShowEmoji(false);
-      setInlineError("");
+      if (ok === "published") {
+        // 自动展开所属线程，让新回复可见
+        if (targetComment.replyTo || targetComment.replyToId) {
+          const rootId = findRootCommentId(targetComment, comments);
+          if (rootId) setExpandedThreads((prev) => new Set(prev).add(rootId));
+        } else {
+          setExpandedThreads((prev) => new Set(prev).add(targetComment.id));
+        }
+        setInlineReplyId(null);
+        setInlineShowEmoji(false);
+        setInlineError("");
+      }
     }
   };
 
@@ -546,6 +555,7 @@ export default function ArticleCommentSection({
       setInlineContent("");
       setInlineShowEmoji(false);
       setInlineError("");
+      setInlineNotice("");
       return;
     }
     // 回复的是子回复时，展开其所属线程（用 findRootCommentId 避免同名歧义）
@@ -560,6 +570,7 @@ export default function ArticleCommentSection({
       setInlineContent("");
       setInlineShowEmoji(false);
       setInlineError("");
+      setInlineNotice("");
     });
     inlineEditorRef.current?.focus();
     inlineEditorRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
@@ -721,6 +732,8 @@ export default function ArticleCommentSection({
           <span className="text-[13px] text-wechat-time">
             {inlineError ? (
               <span className="text-red-500 dark:text-red-400">{inlineError}</span>
+            ) : inlineNotice ? (
+              <span className="text-[#07c160] dark:text-green-400">{inlineNotice}</span>
             ) : inlineContent.length > 0 ? (
               `${inlineContent.length} 字`
             ) : (
@@ -946,6 +959,8 @@ export default function ArticleCommentSection({
                 <span className="text-[13px] text-wechat-time">
                   {error ? (
                     <span className="text-red-500 dark:text-red-400">{error}</span>
+                  ) : notice ? (
+                    <span className="text-[#07c160] dark:text-green-400">{notice}</span>
                   ) : content.length > 0 ? (
                     `${content.length} 字`
                   ) : (

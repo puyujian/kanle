@@ -9,7 +9,7 @@ import { generateShortId } from "../utils/short-id";
 import { triggerRevalidate } from "../utils/revalidate";
 import { checkCommentRate, recordCommentSuccess, resetViolations } from "../middleware/rateLimit";
 import { blacklistService } from "../services/blacklist-service";
-import { sendCommentNotification } from "../services/email-service";
+import { enqueueCommentAiJob, publishComment } from "../services/comment-ai-service";
 import { parseVideoFromUrl, ParseError } from "./video-parse";
 
 const router = Router();
@@ -64,8 +64,8 @@ export function buildIdentity(
  * 匹配父评论用 author + email 双键，避免同名歧义。孤儿回复（父评论不在列表中）排末尾。
  */
 function sortCommentsThreaded<T extends { id: string; replyTo?: string | null; replyToEmail?: string | null; replyToId?: string | null; author: string; email?: string | null; likeCount: number; createdAt: string }>(comments: T[]): T[] {
-  const topLevel = comments.filter((c) => !c.replyTo);
-  const replies = comments.filter((c) => c.replyTo);
+  const byId = new Map(comments.map((comment) => [comment.id, comment]));
+  const topLevel = comments.filter((c) => !c.replyToId && !c.replyTo);
 
   // 顶级评论：点赞多优先，同级时间早优先
   topLevel.sort((a, b) => {
@@ -73,46 +73,33 @@ function sortCommentsThreaded<T extends { id: string; replyTo?: string | null; r
     return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
   });
 
-  // 按父评论 ID 分组（优先用 replyToId 精确匹配，旧数据 fallback 到 author + email 双键）
-  const repliesByParentId = new Map<string, T[]>();
-  const repliesByNameKey = new Map<string, T[]>();
-  for (const r of replies) {
-    if (r.replyToId) {
-      if (!repliesByParentId.has(r.replyToId)) repliesByParentId.set(r.replyToId, []);
-      repliesByParentId.get(r.replyToId)!.push(r);
-    } else {
-      const key = `${r.replyTo}|${r.replyToEmail || ""}`;
-      if (!repliesByNameKey.has(key)) repliesByNameKey.set(key, []);
-      repliesByNameKey.get(key)!.push(r);
-    }
+  const children = new Map<string, T[]>();
+  const legacyParents = new Map(comments.map((item) => [`${item.author}|${item.email || ""}`, item.id]));
+  for (const reply of comments.filter((item) => !topLevel.includes(item))) {
+    const parentId = reply.replyToId && byId.has(reply.replyToId)
+      ? reply.replyToId
+      : legacyParents.get(`${reply.replyTo}|${reply.replyToEmail || ""}`);
+    if (!parentId || parentId === reply.id) continue;
+    if (!children.has(parentId)) children.set(parentId, []);
+    children.get(parentId)!.push(reply);
   }
-  // 每组回复按时间正序（对话顺序）
-  for (const group of [...repliesByParentId.values(), ...repliesByNameKey.values()]) {
+  for (const group of children.values()) {
     group.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
   }
 
-  // 交织：父评论后紧跟其回复
   const result: T[] = [];
-  for (const tc of topLevel) {
-    result.push(tc);
-    // 优先用 ID 匹配
-    const byId = repliesByParentId.get(tc.id);
-    if (byId) {
-      result.push(...byId);
-      repliesByParentId.delete(tc.id);
-    }
-    // 再用 name key 匹配旧数据
-    const nameKey = `${tc.author}|${tc.email || ""}`;
-    const byName = repliesByNameKey.get(nameKey);
-    if (byName) {
-      result.push(...byName);
-      repliesByNameKey.delete(nameKey);
-    }
-  }
-  // 孤儿回复（父评论不在列表中）排末尾
-  for (const group of [...repliesByParentId.values(), ...repliesByNameKey.values()]) {
-    result.push(...group);
-  }
+  const visited = new Set<string>();
+  const visit = (item: T) => {
+    if (visited.has(item.id)) return;
+    visited.add(item.id);
+    result.push(item);
+    for (const child of children.get(item.id) || []) visit(child);
+  };
+  topLevel.forEach(visit);
+  comments
+    .filter((item) => !visited.has(item.id))
+    .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
+    .forEach(visit);
   return result;
 }
 
@@ -231,7 +218,7 @@ router.get("/", authenticateOptional, async (req: AuthRequest, res: Response) =>
     where,
     include: [
       { model: User, as: "author", attributes: ["id", "email", "username", "nickname", "avatar", "cover", "bio"] },
-      { model: Comment, as: "comments" },
+      { model: Comment, as: "comments", where: { status: "published" }, required: false },
       { model: Like, as: "likes", include: [{ model: User, as: "user", attributes: ["email"], required: false }] },
     ],
     order: [["pinned", "DESC"], ["createdAt", "DESC"]],
@@ -311,7 +298,7 @@ router.get("/:id", authenticateOptional, async (req: AuthRequest, res: Response)
     where,
     include: [
       { model: User, as: "author", attributes: ["id", "email", "username", "nickname", "avatar", "cover", "bio"] },
-      { model: Comment, as: "comments" },
+      { model: Comment, as: "comments", where: { status: "published" }, required: false },
       { model: Like, as: "likes", include: [{ model: User, as: "user", attributes: ["email"], required: false }] },
     ],
   });
@@ -479,7 +466,7 @@ router.post(
     const full = await Post.findByPk(post!.id, {
       include: [
         { model: User, as: "author", attributes: ["id", "email", "username", "nickname", "avatar", "cover", "bio"] },
-        { model: Comment, as: "comments" },
+        { model: Comment, as: "comments", where: { status: "published" }, required: false },
         { model: Like, as: "likes", include: [{ model: User, as: "user", attributes: ["email"], required: false }] },
       ],
     });
@@ -669,9 +656,10 @@ router.post(
 // POST /api/posts/:id/comments
 router.post(
   "/:id/comments",
+  authenticateOptional,
   [
     param("id").isUUID(),
-    body("content").trim().isLength({ min: 1 }),
+    body("content").trim().isLength({ min: 1, max: 5000 }),
     body("authorName").trim().isLength({ min: 1, max: 100 }),
     body("email").trim().isEmail().normalizeEmail(),
     body("website").optional().trim().isLength({ max: 255 }),
@@ -679,7 +667,7 @@ router.post(
     body("replyToEmail").optional().trim().isEmail().normalizeEmail(),
     body("replyToId").optional({ checkFalsy: true }).isUUID(),
   ],
-  async (req: Request, res: Response) => {
+  async (req: AuthRequest, res: Response) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
       res.status(400).json({ errors: errors.array() });
@@ -693,14 +681,21 @@ router.post(
       res.status(404).json({ message: "动态不存在" });
       return;
     }
+    if (post.commentsDisabled) {
+      res.status(403).json({ message: "该内容已关闭评论", code: "COMMENTS_DISABLED" });
+      return;
+    }
 
     const ip = getClientIp(req);
-    const email: string = req.body.email;
+    const isAdmin = req.user?.role === "admin";
+    const admin = isAdmin ? await User.findByPk(req.user!.id, { attributes: ["nickname", "email"] }) : null;
+    const email: string = admin?.email || req.body.email;
+    const authorName: string = admin?.nickname || req.body.authorName;
     const commentRegion = await getRegionByIp(ip);
 
     // 评论防刷总开关：关闭时跳过黑名单和限流检查，仅记录 IP
     const antiSpamEnabled = await blacklistService.isAntiSpamEnabled();
-    if (antiSpamEnabled) {
+    if (antiSpamEnabled && !isAdmin) {
       // 1. 黑名单检查（邮箱或 IP 任一命中即拒绝）
       const ban = await blacklistService.check(email, ip);
       if (ban.banned) {
@@ -742,7 +737,7 @@ router.post(
 
     // 3. 违禁词检查：评论内容包含违禁词时拒绝发布
     const setting = await SiteSetting.findByPk(1);
-    if (setting?.bannedWords) {
+    if (!isAdmin && setting?.bannedWords) {
       let bannedWords: string[] = [];
       try {
         bannedWords = JSON.parse(setting.bannedWords);
@@ -764,21 +759,49 @@ router.post(
       }
     }
 
+    let replyTo = req.body.replyTo || null;
+    let replyToEmail = req.body.replyToEmail || null;
+    if (req.body.replyToId) {
+      const parent = await Comment.findOne({
+        where: { id: req.body.replyToId, postId: post.id, status: "published" },
+      });
+      if (!parent) {
+        res.status(400).json({ message: "被回复的评论不存在或尚未发布" });
+        return;
+      }
+      replyTo = parent.authorName;
+      replyToEmail = parent.email;
+    }
+
+    const reviewMode = isAdmin ? "off" : await blacklistService.getCommentReviewMode();
     const comment = await Comment.create({
       postId: post.id,
-      authorName: req.body.authorName,
+      authorName,
       email,
       website: req.body.website || null,
-      replyTo: req.body.replyTo || null,
-      replyToEmail: req.body.replyToEmail || null,
+      replyTo,
+      replyToEmail,
       replyToId: req.body.replyToId || null,
       content: req.body.content,
       ip,
       region: commentRegion,
+      source: isAdmin ? "admin" : "visitor",
+      status: "pending",
     });
 
     // 评论成功后记录一次命中（用于后续限流计数），并重置该用户的违规计数
-    if (antiSpamEnabled) recordCommentSuccess(email, ip);
+    if (antiSpamEnabled && !isAdmin) recordCommentSuccess(email, ip);
+
+    if (reviewMode === "off") {
+      await publishComment(comment);
+    } else if (reviewMode === "ai") {
+      await enqueueCommentAiJob(comment.id, "moderation");
+    }
+
+    if (comment.status !== "published") {
+      res.status(202).json({ status: "pending", message: "评论已提交，审核通过后显示" });
+      return;
+    }
 
     // 服务端标记作者评论（与 formatPost 逻辑一致）
     const authorEmail = (post as any).author?.email ? String((post as any).author.email).toLowerCase() : "";
@@ -799,19 +822,8 @@ router.post(
       meLiked: false,
       isAuthor,
       region: comment.region || "",
+      status: comment.status,
     });
-
-    // 发送邮件通知（非关键路径，失败仅记日志，不阻塞响应）
-    sendCommentNotification({
-      actorNickname: comment.authorName,
-      actorEmail: comment.email,
-      content: comment.content,
-      replyTo: comment.replyTo,
-      replyToEmail: comment.replyToEmail,
-      postContent: post.content || post.title || "",
-      postId: post.id,
-      commentId: comment.id,
-    }).catch(() => {});
   }
 );
 
@@ -844,6 +856,10 @@ router.post(
       where: { id: req.params.commentId, postId: req.params.id },
     });
     if (!comment) {
+      res.status(404).json({ message: "评论不存在" });
+      return;
+    }
+    if (comment.status !== "published") {
       res.status(404).json({ message: "评论不存在" });
       return;
     }

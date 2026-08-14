@@ -11,6 +11,7 @@ import Media from "./Media";
 import RssSource from "./RssSource";
 import RssArticle from "./RssArticle";
 import AiSetting from "./AiSetting";
+import CommentAiJob from "./CommentAiJob";
 
 // Associations
 User.hasMany(Post, { foreignKey: "userId", as: "posts" });
@@ -30,11 +31,14 @@ CommentLike.belongsTo(Comment, { foreignKey: "commentId", as: "comment" });
 CommentLike.belongsTo(User, { foreignKey: "userId", as: "user" });
 User.hasMany(CommentLike, { foreignKey: "userId", as: "userCommentLikes" });
 
+Comment.hasMany(CommentAiJob, { foreignKey: "commentId", as: "aiJobs", onDelete: "CASCADE" });
+CommentAiJob.belongsTo(Comment, { foreignKey: "commentId", as: "comment" });
+
 Media.belongsTo(User, { foreignKey: "uploaderId", as: "uploader" });
 User.hasMany(Media, { foreignKey: "uploaderId", as: "uploadedMedia" });
 
 RssSource.hasMany(RssArticle, { foreignKey: "sourceId", as: "articles" });
 RssArticle.belongsTo(RssSource, { foreignKey: "sourceId", as: "source" });
 
-export { sequelize, User, Post, Comment, Like, CommentLike, SiteSetting, FriendLink, Blacklist, Media, RssSource, RssArticle, AiSetting };
+export { sequelize, User, Post, Comment, Like, CommentLike, SiteSetting, FriendLink, Blacklist, Media, RssSource, RssArticle, AiSetting, CommentAiJob };
 export { getMediaCategory } from "./Media";

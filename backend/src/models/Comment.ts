@@ -14,10 +14,16 @@ interface CommentAttributes {
   content: string;
   ip?: string;
   region?: string;
+  status: "pending" | "draft" | "published" | "rejected";
+  source: "visitor" | "admin" | "ai";
+  reviewMethod?: "human" | "ai" | null;
+  reviewReason?: string | null;
+  reviewedAt?: Date | null;
+  reviewedById?: string | null;
 }
 
 interface CommentCreationAttributes
-  extends Optional<CommentAttributes, "id" | "replyTo" | "replyToEmail" | "replyToId" | "website" | "ip" | "region"> {}
+  extends Optional<CommentAttributes, "id" | "replyTo" | "replyToEmail" | "replyToId" | "website" | "ip" | "region" | "status" | "source" | "reviewMethod" | "reviewReason" | "reviewedAt" | "reviewedById"> {}
 
 class Comment
   extends Model<CommentAttributes, CommentCreationAttributes>
@@ -34,6 +40,12 @@ class Comment
   declare content: string;
   declare ip?: string;
   declare region?: string;
+  declare status: "pending" | "draft" | "published" | "rejected";
+  declare source: "visitor" | "admin" | "ai";
+  declare reviewMethod?: "human" | "ai" | null;
+  declare reviewReason?: string | null;
+  declare reviewedAt?: Date | null;
+  declare reviewedById?: string | null;
   declare readonly createdAt: Date;
   declare readonly updatedAt: Date;
   // Association
@@ -91,6 +103,32 @@ Comment.init(
     },
     region: {
       type: DataTypes.STRING(20),
+      allowNull: true,
+    },
+    status: {
+      type: DataTypes.ENUM("pending", "draft", "published", "rejected"),
+      allowNull: false,
+      defaultValue: "published",
+    },
+    source: {
+      type: DataTypes.ENUM("visitor", "admin", "ai"),
+      allowNull: false,
+      defaultValue: "visitor",
+    },
+    reviewMethod: {
+      type: DataTypes.ENUM("human", "ai"),
+      allowNull: true,
+    },
+    reviewReason: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+    },
+    reviewedAt: {
+      type: DataTypes.DATE,
+      allowNull: true,
+    },
+    reviewedById: {
+      type: DataTypes.UUID,
       allowNull: true,
     },
   },

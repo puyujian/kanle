@@ -108,7 +108,7 @@ router.get("/", async (req: Request, res: Response) => {
           limit: 200,
         }),
         Comment.findAll({
-          where: { postId: postIds },
+          where: { postId: postIds, status: "published" },
           order: [["createdAt", "DESC"]],
           limit: 200,
         }),
@@ -120,7 +120,7 @@ router.get("/", async (req: Request, res: Response) => {
       const nameToEmail = new Map<string, string>();
       if (likeNames.length > 0) {
         const commentsForEmail = await Comment.findAll({
-          where: { authorName: likeNames },
+          where: { authorName: likeNames, status: "published" },
           attributes: ["authorName", "email"],
           order: [["createdAt", "DESC"]],
         });
@@ -196,7 +196,7 @@ router.get("/", async (req: Request, res: Response) => {
     }
 
     const comments = await Comment.findAll({
-      where: { replyToEmail: email },
+      where: { replyToEmail: email, status: "published" },
       order: [["createdAt", "DESC"]],
       limit: 200,
       include: [{ model: Post, as: "post", attributes: ["id", "shortId", "type", "content", "images", "music", "linkCard", "video", "cover"] }],

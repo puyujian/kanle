@@ -43,6 +43,8 @@ interface SiteSettingAttributes {
   adOnArchives: boolean;
   /** 评论防刷（限流 + 黑名单）总开关，默认开启 */
   commentAntiSpamEnabled: boolean;
+  /** 评论审核：off=关闭，manual=人工，ai=AI */
+  commentReviewMode: "off" | "manual" | "ai";
   /** RSS 订阅总开关，关闭后 /feed 返回 404 */
   rssEnabled: boolean;
   /** RSS 是否包含动态（moment），关闭后只订阅文章（article） */
@@ -67,7 +69,7 @@ interface SiteSettingAttributes {
 
 interface SiteSettingCreationAttributes extends Optional<
   SiteSettingAttributes,
-  "id" | "siteName" | "description" | "keywords" | "domain" | "beian" | "faviconUrl" | "ogImage" | "musicUrl" | "musicId" | "musicSource" | "playlistId" | "backgroundImages" | "darkModeEnabled" | "darkModeStartTime" | "darkModeEndTime" | "emailNotifyEnabled" | "notifyEmail" | "smtpHost" | "smtpPort" | "smtpSecure" | "smtpUser" | "smtpPass" | "smtpFrom" | "emailTemplate" | "upyunEnabled" | "upyunBucket" | "upyunOperator" | "upyunPassword" | "upyunDomain" | "upyunPath" | "amapJsKey" | "amapSecurityJsCode" | "amapKey" | "beianUrl" | "socialLinks" | "postCollapseLength" | "fontUrl" | "adOnArchives" | "commentAntiSpamEnabled" | "rssEnabled" | "rssIncludeMoments" | "doubanId" | "bannedWords" | "musicAutoplay" | "cdnProxyUrl" | "analyticsCode" | "laAccessKey" | "laSecretKey" | "laMaskId"
+  "id" | "siteName" | "description" | "keywords" | "domain" | "beian" | "faviconUrl" | "ogImage" | "musicUrl" | "musicId" | "musicSource" | "playlistId" | "backgroundImages" | "darkModeEnabled" | "darkModeStartTime" | "darkModeEndTime" | "emailNotifyEnabled" | "notifyEmail" | "smtpHost" | "smtpPort" | "smtpSecure" | "smtpUser" | "smtpPass" | "smtpFrom" | "emailTemplate" | "upyunEnabled" | "upyunBucket" | "upyunOperator" | "upyunPassword" | "upyunDomain" | "upyunPath" | "amapJsKey" | "amapSecurityJsCode" | "amapKey" | "beianUrl" | "socialLinks" | "postCollapseLength" | "fontUrl" | "adOnArchives" | "commentAntiSpamEnabled" | "commentReviewMode" | "rssEnabled" | "rssIncludeMoments" | "doubanId" | "bannedWords" | "musicAutoplay" | "cdnProxyUrl" | "analyticsCode" | "laAccessKey" | "laSecretKey" | "laMaskId"
 > {}
 
 class SiteSetting
@@ -114,6 +116,7 @@ class SiteSetting
   declare fontUrl: string;
   declare adOnArchives: boolean;
   declare commentAntiSpamEnabled: boolean;
+  declare commentReviewMode: "off" | "manual" | "ai";
   declare rssEnabled: boolean;
   declare rssIncludeMoments: boolean;
   declare doubanId: string;
@@ -331,6 +334,11 @@ SiteSetting.init(
       type: DataTypes.BOOLEAN,
       allowNull: false,
       defaultValue: true,
+    },
+    commentReviewMode: {
+      type: DataTypes.ENUM("off", "manual", "ai"),
+      allowNull: false,
+      defaultValue: "off",
     },
     rssEnabled: {
       type: DataTypes.BOOLEAN,

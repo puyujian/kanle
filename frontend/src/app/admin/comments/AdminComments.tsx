@@ -1,25 +1,32 @@
 "use client";
 
-import { useEffect, useState, useRef, useCallback } from "react";
-import { useRouter } from "next/navigation";
-import Image from "next/image";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  MessageCircle,
-  Trash2,
-  Search,
-  Link2,
-  Pencil,
+  Bot,
   Check,
-  X,
-  Smile,
-  ChevronDown,
-  ChevronUp,
   Loader2,
+  MessageCircle,
+  Pencil,
+  RefreshCw,
+  Save,
+  Search,
+  Trash2,
+  UserRound,
+  X,
 } from "lucide-react";
-import { cravatarUrl } from "@/lib/avatar";
 import { apiFetch, getToken } from "@/lib/api-fetch";
-import { renderTextWithEmoji, EMOJI_LIST, shortcodeToHtml, editableToShortcode, emojiImgTag } from "@/lib/emoji";
-import { CommentRowSkeleton } from "@/components/Skeleton";
+import { renderTextWithEmoji } from "@/lib/emoji";
+
+type CommentStatus = "pending" | "draft" | "published" | "rejected";
+type CommentSource = "visitor" | "admin" | "ai";
+
+interface AiJob {
+  id: string;
+  type: "moderation" | "reply";
+  status: "queued" | "running" | "succeeded" | "failed";
+  attempts: number;
+  lastError: string;
+}
 
 interface AdminComment {
   id: string;
@@ -29,710 +36,281 @@ interface AdminComment {
   content: string;
   replyTo?: string;
   region?: string;
+  status: CommentStatus;
+  source: CommentSource;
+  reviewMethod?: "human" | "ai" | null;
+  reviewReason?: string;
+  reviewedAt?: string | null;
   createdAt: string;
-  post: {
-    id: string;
-    content: string;
-    author: string;
-  } | null;
+  aiJobs: AiJob[];
+  post: { id: string; content: string; author: string } | null;
 }
 
-/** Strip HTML tags + decode entities + truncate for preview */
-function stripHtml(html: string): string {
-  const tmp = document.createElement("div");
-  tmp.innerHTML = html;
-  return (tmp.textContent || tmp.innerText || "").replace(/\s+/g, " ").trim();
+interface CommentResponse {
+  counts: Record<"all" | CommentStatus, number>;
+  data: AdminComment[];
 }
 
-function truncate(text: string, max = 40): string {
-  if (text.length <= max) return text;
-  return text.slice(0, max) + "...";
+const STATUS_META: Record<"all" | CommentStatus, { label: string; cls: string }> = {
+  all: { label: "全部", cls: "bg-adm-input text-adm-text-secondary" },
+  pending: { label: "待审核", cls: "bg-amber-500/10 text-amber-600 dark:text-amber-400" },
+  draft: { label: "AI 草稿", cls: "bg-violet-500/10 text-violet-600 dark:text-violet-400" },
+  published: { label: "已发布", cls: "bg-green-500/10 text-green-600 dark:text-green-400" },
+  rejected: { label: "已拒绝", cls: "bg-red-500/10 text-red-600 dark:text-red-400" },
+};
+
+function stripHtml(value: string): string {
+  if (typeof document === "undefined") return value.replace(/<[^>]+>/g, " ");
+  const node = document.createElement("div");
+  node.innerHTML = value;
+  return (node.textContent || "").replace(/\s+/g, " ").trim();
 }
 
 export default function AdminComments() {
-  const router = useRouter();
-  const [comments, setComments] = useState<AdminComment[]>([]);
+  const [response, setResponse] = useState<CommentResponse>({
+    counts: { all: 0, pending: 0, draft: 0, published: 0, rejected: 0 },
+    data: [],
+  });
   const [loading, setLoading] = useState(true);
+  const [filter, setFilter] = useState<"all" | CommentStatus>("all");
   const [search, setSearch] = useState("");
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [busy, setBusy] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState({ author: "", email: "", website: "", content: "" });
-  const [saving, setSaving] = useState(false);
-  const [deletingId, setDeletingId] = useState<string | null>(null);
 
-  const token = getToken();
-
-  const fetchComments = () => {
-    if (!token) return;
+  const load = useCallback(async () => {
     setLoading(true);
-    apiFetch("/admin/comments")
-      .then((res) => res.json())
-      .then((data) => {
-        const list = Array.isArray(data) ? data : [];
-        setComments(list);
-        if (list.length > 0 && !selectedId) setSelectedId(list[0].id);
-      })
-      .catch(() => setComments([]))
-      .finally(() => setLoading(false));
-  };
+    try {
+      const res = await apiFetch("/admin/comments");
+      if (!res.ok) throw new Error("加载评论失败");
+      const data = await res.json();
+      setResponse({
+        counts: data.counts || { all: 0, pending: 0, draft: 0, published: 0, rejected: 0 },
+        data: Array.isArray(data.data) ? data.data : [],
+      });
+      setSelected(new Set());
+    } catch (error) {
+      alert(error instanceof Error ? error.message : "加载评论失败");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
-    if (!token) {
-      router.replace("/");
-      return;
-    }
-    fetchComments();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [router, token]);
+    if (!getToken()) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void load();
+  }, [load]);
 
-  const handleDelete = async (id: string) => {
-    if (!token || !confirm("确定删除这条评论吗？")) return;
-    setDeletingId(id);
+  const visible = useMemo(() => {
+    const keyword = search.trim().toLowerCase();
+    return response.data.filter((comment) => {
+      if (filter !== "all" && comment.status !== filter) return false;
+      if (!keyword) return true;
+      return [comment.author, comment.email, comment.content, comment.post?.content || ""]
+        .some((value) => value.toLowerCase().includes(keyword));
+    });
+  }, [filter, response.data, search]);
+
+  const allVisibleSelected = visible.length > 0 && visible.every((comment) => selected.has(comment.id));
+
+  const runBulk = async (action: "approve" | "reject" | "delete", ids = [...selected]) => {
+    if (!ids.length || busy) return;
+    const message = action === "delete"
+      ? "确定永久删除所选评论吗？其下所有回复也会一并删除。"
+      : action === "approve" ? "确定通过所选评论吗？" : "确定拒绝所选评论吗？";
+    if (!window.confirm(message)) return;
+    setBusy(true);
     try {
-      const res = await apiFetch(`/admin/comments/${id}`, { method: "DELETE" });
-      if (res.ok) {
-        setComments((prev) => prev.filter((c) => c.id !== id));
-        if (selectedId === id) setSelectedId(null);
-      } else {
-        alert("删除失败，请重试");
-      }
-    } catch {
-      alert("网络错误，请重试");
+      const res = await apiFetch("/admin/comments/bulk", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids, action }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.message || "操作失败");
+      if (data.skipped) alert(`操作完成，${data.skipped} 条因状态不适用或不存在而跳过。`);
+      await load();
+    } catch (error) {
+      alert(error instanceof Error ? error.message : "操作失败");
     } finally {
-      setDeletingId(null);
+      setBusy(false);
     }
   };
 
-  const startEdit = (c: AdminComment) => {
-    setEditingId(c.id);
-    setEditForm({ author: c.author, email: c.email, website: c.website || "", content: c.content });
+  const retryAi = async (comment: AdminComment, job: AiJob) => {
+    setBusy(true);
+    try {
+      const res = await apiFetch(`/admin/comments/${comment.id}/ai-retry`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ type: job.type }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.message || "重试失败");
+      await load();
+    } catch (error) {
+      alert(error instanceof Error ? error.message : "重试失败");
+    } finally {
+      setBusy(false);
+    }
   };
 
-  const cancelEdit = () => setEditingId(null);
+  const startEdit = (comment: AdminComment) => {
+    setEditingId(comment.id);
+    setEditForm({
+      author: comment.author,
+      email: comment.email,
+      website: comment.website || "",
+      content: comment.content,
+    });
+  };
 
-  const saveEdit = async (id: string, content: string) => {
-    setSaving(true);
+  const saveEdit = async () => {
+    if (!editingId || !editForm.author.trim() || !editForm.email.trim() || !editForm.content.trim()) return;
+    setBusy(true);
     try {
-      const res = await apiFetch(`/admin/comments/${id}`, {
+      const res = await apiFetch(`/admin/comments/${editingId}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          author: editForm.author.trim(),
-          email: editForm.email.trim(),
-          website: editForm.website.trim(),
-          content: content.trim(),
-        }),
+        body: JSON.stringify(editForm),
       });
-      if (res.ok) {
-        const updated = await res.json();
-        setComments((prev) => prev.map((c) => (c.id === id ? { ...c, ...updated } : c)));
-        setEditingId(null);
-      } else {
-        const data = await res.json().catch(() => ({}));
-        alert(data.message || "保存失败，请重试");
-      }
-    } catch {
-      alert("网络错误，请重试");
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.message || "保存失败");
+      setEditingId(null);
+      await load();
+    } catch (error) {
+      alert(error instanceof Error ? error.message : "保存失败");
     } finally {
-      setSaving(false);
+      setBusy(false);
     }
   };
 
-  const filtered = comments.filter(
-    (c) =>
-      c.author.toLowerCase().includes(search.toLowerCase()) ||
-      c.content.toLowerCase().includes(search.toLowerCase()) ||
-      c.email.toLowerCase().includes(search.toLowerCase()),
-  );
+  return (
+    <div className="space-y-4">
+      <div>
+        <h2 className="text-lg font-bold text-adm-text">评论管理</h2>
+        <p className="mt-1 text-sm text-adm-text-secondary">审核访客评论与 AI 回复草稿，共 {response.counts.all} 条</p>
+      </div>
 
-  const selected = comments.find((c) => c.id === selectedId) || null;
-
-  if (loading) {
-    return (
-      <div className="divide-hairline rounded-xl bg-white dark:bg-adm-card">
-        {Array.from({ length: 5 }).map((_, i) => (
-          <CommentRowSkeleton key={i} />
+      <div className="flex gap-2 overflow-x-auto pb-1">
+        {(Object.keys(STATUS_META) as Array<"all" | CommentStatus>).map((status) => (
+          <button
+            key={status}
+            onClick={() => { setFilter(status); setSelected(new Set()); }}
+            className={`whitespace-nowrap rounded-lg border px-3 py-2 text-xs font-medium transition-colors ${filter === status ? "border-adm-primary bg-adm-primary/10 text-adm-primary" : "border-adm-border bg-adm-card text-adm-text-secondary"}`}
+          >
+            {STATUS_META[status].label} {response.counts[status] || 0}
+          </button>
         ))}
       </div>
-    );
-  }
 
-  return (
-    <div className="space-y-3">
-      <div className="min-w-0">
-        <h2 className="text-lg font-bold text-adm-text">评论管理</h2>
-        <p className="mt-1 text-sm text-adm-text-secondary">
-          共 {comments.length} 条评论
-        </p>
+      <div className="flex flex-col gap-2 sm:flex-row">
+        <div className="relative min-w-0 flex-1">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-adm-text-tertiary" />
+          <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="搜索昵称、邮箱、评论或原文…" className="w-full rounded-xl border border-adm-border bg-adm-card py-2.5 pl-10 pr-3 text-sm text-adm-text outline-none focus:border-adm-primary" />
+        </div>
+        <button onClick={() => void load()} className="flex items-center justify-center gap-1.5 rounded-xl border border-adm-border bg-adm-card px-3 py-2 text-sm text-adm-text-secondary hover:bg-adm-card-hover">
+          <RefreshCw className="h-4 w-4" />刷新
+        </button>
       </div>
 
-      {/* Search */}
-      <div className="relative">
-        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-adm-text-tertiary" />
-        <input
-          type="text"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="搜索昵称、邮箱或内容..."
-          className="w-full rounded-xl border border-adm-border bg-adm-card py-2.5 pl-10 pr-10 text-sm text-adm-text transition-colors focus:border-adm-text-secondary focus:outline-none"
-        />
-        {search && (
-          <button
-            type="button"
-            onClick={() => setSearch("")}
-            className="absolute right-2 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-lg text-adm-text-tertiary hover:bg-adm-card-hover hover:text-adm-text-secondary"
-            aria-label="清除搜索"
-          >
-            <X className="h-4 w-4" />
-          </button>
-        )}
-      </div>
+      {selected.size > 0 && (
+        <div className="flex flex-wrap items-center gap-2 rounded-xl border border-adm-border bg-adm-card p-3">
+          <span className="mr-auto text-sm text-adm-text-secondary">已选择 {selected.size} 条</span>
+          <ActionButton icon={<Check className="h-4 w-4" />} label="批量通过" onClick={() => void runBulk("approve")} disabled={busy} />
+          <ActionButton icon={<X className="h-4 w-4" />} label="批量拒绝" onClick={() => void runBulk("reject")} disabled={busy} />
+          <ActionButton danger icon={<Trash2 className="h-4 w-4" />} label="批量删除" onClick={() => void runBulk("delete")} disabled={busy} />
+        </div>
+      )}
 
-      {filtered.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-adm-border bg-adm-card py-12 text-center">
+      {loading ? (
+        <div className="flex justify-center py-20"><Loader2 className="h-7 w-7 animate-spin text-adm-text-tertiary" /></div>
+      ) : visible.length === 0 ? (
+        <div className="rounded-2xl border border-dashed border-adm-border bg-adm-card py-16 text-center">
           <MessageCircle className="mx-auto mb-2 h-8 w-8 text-adm-text-tertiary" />
-          <p className="text-sm text-adm-text-tertiary">
-            {search ? "未找到匹配的评论" : "暂无评论"}
-          </p>
+          <p className="text-sm text-adm-text-tertiary">暂无符合条件的评论</p>
         </div>
       ) : (
-        <>
-          {/* Desktop: double-column list + detail */}
-          <div className="hidden gap-3 lg:grid lg:grid-cols-[360px_1fr]">
-            <div className="space-y-2 lg:max-h-[calc(100vh-16rem)] lg:overflow-y-auto lg:pr-1">
-              {filtered.map((comment) => (
-                <CommentListItem
-                  key={comment.id}
-                  comment={comment}
-                  selected={selectedId === comment.id}
-                  onSelect={() => {
-                    setSelectedId(comment.id);
-                    setEditingId(null);
-                  }}
-                />
-              ))}
-            </div>
-            <div>
-              {selected ? (
-                <CommentDetail
-                  comment={selected}
-                  editingId={editingId}
-                  editForm={editForm}
-                  setEditForm={setEditForm}
-                  saving={saving}
-                  onStartEdit={startEdit}
-                  onCancelEdit={cancelEdit}
-                  onSaveEdit={saveEdit}
-                  onDelete={handleDelete}
-                />
-              ) : (
-                <div className="rounded-2xl border border-dashed border-adm-border bg-adm-card py-16 text-center">
-                  <MessageCircle className="mx-auto mb-2 h-8 w-8 text-adm-text-tertiary" />
-                  <p className="text-sm text-adm-text-tertiary">选择左侧评论查看详情</p>
-                </div>
-              )}
-            </div>
-          </div>
+        <div className="overflow-hidden rounded-2xl border border-adm-border bg-adm-card">
+          <label className="flex items-center gap-2 border-b border-adm-border px-4 py-3 text-xs text-adm-text-secondary">
+            <input type="checkbox" checked={allVisibleSelected} onChange={() => setSelected(allVisibleSelected ? new Set() : new Set(visible.map((comment) => comment.id)))} className="accent-adm-primary" />
+            全选当前筛选结果
+          </label>
+          <div className="divide-y divide-adm-border">
+            {visible.map((comment) => {
+              const failedJobs = comment.aiJobs.filter((job) => job.status === "failed");
+              const activeJob = comment.aiJobs.find((job) => job.status === "queued" || job.status === "running");
+              return (
+                <article key={comment.id} className="p-4">
+                  <div className="flex items-start gap-3">
+                    <input type="checkbox" checked={selected.has(comment.id)} onChange={() => setSelected((previous) => { const next = new Set(previous); if (next.has(comment.id)) next.delete(comment.id); else next.add(comment.id); return next; })} className="mt-1 accent-adm-primary" />
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="font-medium text-adm-text">{comment.author}</span>
+                        <span className="text-xs text-adm-text-tertiary">{comment.email}</span>
+                        <span className={`rounded px-1.5 py-0.5 text-[11px] ${STATUS_META[comment.status].cls}`}>{STATUS_META[comment.status].label}</span>
+                        <span className="flex items-center gap-1 rounded bg-adm-input px-1.5 py-0.5 text-[11px] text-adm-text-secondary">
+                          {comment.source === "ai" ? <Bot className="h-3 w-3" /> : <UserRound className="h-3 w-3" />}
+                          {comment.source === "ai" ? "AI" : comment.source === "admin" ? "管理员" : "访客"}
+                        </span>
+                        {activeJob && <span className="flex items-center gap-1 text-[11px] text-violet-500"><Loader2 className="h-3 w-3 animate-spin" />AI {activeJob.type === "moderation" ? "审核" : "回复"}中</span>}
+                      </div>
 
-          {/* Mobile: single column with inline edit */}
-          <div className="space-y-2 lg:hidden">
-            {filtered.map((comment) => (
-              <div key={`mobile-${comment.id}`}>
-                {editingId === comment.id ? (
-                  <CommentEditCard
-                    editForm={editForm}
-                    setEditForm={setEditForm}
-                    saving={saving}
-                    onCancelEdit={cancelEdit}
-                    onSaveEdit={(content) => saveEdit(comment.id, content)}
-                  />
-                ) : (
-                  <CommentMobileCard
-                    comment={comment}
-                    onStartEdit={startEdit}
-                    onDelete={handleDelete}
-                    deleting={deletingId === comment.id}
-                  />
-                )}
-              </div>
-            ))}
+                      {editingId === comment.id ? (
+                        <div className="mt-3 space-y-2 rounded-xl bg-adm-input p-3">
+                          <div className="grid gap-2 sm:grid-cols-3">
+                            <input value={editForm.author} onChange={(event) => setEditForm({ ...editForm, author: event.target.value })} placeholder="昵称" className="comment-admin-input" />
+                            <input value={editForm.email} onChange={(event) => setEditForm({ ...editForm, email: event.target.value })} placeholder="邮箱" className="comment-admin-input" />
+                            <input value={editForm.website} onChange={(event) => setEditForm({ ...editForm, website: event.target.value })} placeholder="网站" className="comment-admin-input" />
+                          </div>
+                          <textarea value={editForm.content} onChange={(event) => setEditForm({ ...editForm, content: event.target.value })} rows={4} className="comment-admin-input resize-y" />
+                          <div className="flex gap-2">
+                            <ActionButton icon={<Save className="h-4 w-4" />} label="保存" onClick={() => void saveEdit()} disabled={busy} />
+                            <ActionButton icon={<X className="h-4 w-4" />} label="取消" onClick={() => setEditingId(null)} disabled={busy} />
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="mt-2 text-sm leading-6 text-adm-text-secondary" dangerouslySetInnerHTML={{ __html: renderTextWithEmoji(comment.content) }} />
+                      )}
+
+                      <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs text-adm-text-tertiary">
+                        <span>{new Date(comment.createdAt).toLocaleString("zh-CN")}</span>
+                        {comment.region && <span>{comment.region}</span>}
+                        {comment.replyTo && <span>回复 {comment.replyTo}</span>}
+                        {comment.post && <span className="max-w-full truncate">来自：{comment.post.author} · {stripHtml(comment.post.content).slice(0, 50)}</span>}
+                      </div>
+                      {comment.reviewReason && <p className="mt-2 rounded-lg bg-adm-input px-3 py-2 text-xs text-adm-text-secondary">审核意见：{comment.reviewReason}</p>}
+                      {failedJobs.map((job) => (
+                        <div key={job.id} className="mt-2 flex flex-wrap items-center gap-2 rounded-lg bg-red-500/5 px-3 py-2 text-xs text-red-500">
+                          <span>AI {job.type === "moderation" ? "审核" : "回复"}失败：{job.lastError || "未知错误"}</span>
+                          <button disabled={busy} onClick={() => void retryAi(comment, job)} className="flex items-center gap-1 font-medium hover:underline"><RefreshCw className="h-3 w-3" />重试</button>
+                        </div>
+                      ))}
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        {["pending", "draft", "rejected"].includes(comment.status) && <ActionButton icon={<Check className="h-4 w-4" />} label="通过" onClick={() => void runBulk("approve", [comment.id])} disabled={busy} />}
+                        {["pending", "draft"].includes(comment.status) && <ActionButton icon={<X className="h-4 w-4" />} label="拒绝" onClick={() => void runBulk("reject", [comment.id])} disabled={busy} />}
+                        <ActionButton icon={<Pencil className="h-4 w-4" />} label="编辑" onClick={() => startEdit(comment)} disabled={busy} />
+                        <ActionButton danger icon={<Trash2 className="h-4 w-4" />} label="删除" onClick={() => void runBulk("delete", [comment.id])} disabled={busy} />
+                      </div>
+                    </div>
+                  </div>
+                </article>
+              );
+            })}
           </div>
-        </>
+        </div>
       )}
+      <style jsx global>{`.comment-admin-input{width:100%;border-radius:.5rem;border:1px solid var(--adm-border);background:var(--adm-card);padding:.55rem .7rem;font-size:.875rem;color:var(--adm-text);outline:none}.comment-admin-input:focus{border-color:var(--adm-primary)}`}</style>
     </div>
   );
 }
 
-/** List item (desktop left column) */
-function CommentListItem({
-  comment,
-  selected,
-  onSelect,
-}: {
-  comment: AdminComment;
-  selected: boolean;
-  onSelect: () => void;
-}) {
+function ActionButton({ icon, label, onClick, disabled, danger = false }: { icon: React.ReactNode; label: string; onClick: () => void; disabled?: boolean; danger?: boolean }) {
   return (
-    <button
-      onClick={onSelect}
-      className={`w-full rounded-xl border p-3 text-left transition-colors ${
-        selected
-          ? "border-adm-primary bg-adm-primary/5"
-          : "border-adm-border bg-adm-card hover:bg-adm-card-hover"
-      }`}
-    >
-      <div className="flex items-start gap-2.5">
-        <div className="relative h-8 w-8 shrink-0 overflow-hidden rounded-lg bg-adm-input">
-          <Image
-            src={cravatarUrl(comment.email || "", 64)}
-            alt={comment.author}
-            fill
-            className="object-cover"
-            sizes="32px"
-            unoptimized
-          />
-        </div>
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-1.5">
-            <span className="truncate text-sm font-medium text-adm-text">{comment.author}</span>
-            <span className="text-[10px] text-adm-text-tertiary">{comment.email}</span>
-          </div>
-          <p
-            className="mt-0.5 line-clamp-2 text-xs text-adm-text-secondary"
-            dangerouslySetInnerHTML={{ __html: renderTextWithEmoji(comment.content) }}
-          />
-          <div className="mt-1 flex items-center gap-2 text-[10px] text-adm-text-tertiary">
-            <span>{new Date(comment.createdAt).toLocaleDateString("zh-CN")}</span>
-            {comment.region && (
-              <span>{comment.region}</span>
-            )}
-            {comment.post && (
-              <span className="truncate">
-                来自：{comment.post.author} · {truncate(stripHtml(comment.post.content), 20)}
-              </span>
-            )}
-          </div>
-        </div>
-      </div>
+    <button disabled={disabled} onClick={onClick} className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-opacity disabled:opacity-50 ${danger ? "bg-adm-danger-bg text-adm-danger" : "bg-adm-card-hover text-adm-text-secondary hover:text-adm-text"}`}>
+      {icon}{label}
     </button>
-  );
-}
-
-/** Detail panel (desktop right column) */
-function CommentDetail({
-  comment,
-  editingId,
-  editForm,
-  setEditForm,
-  saving,
-  onStartEdit,
-  onCancelEdit,
-  onSaveEdit,
-  onDelete,
-}: {
-  comment: AdminComment;
-  editingId: string | null;
-  editForm: { author: string; email: string; website: string; content: string };
-  setEditForm: React.Dispatch<React.SetStateAction<{ author: string; email: string; website: string; content: string }>>;
-  saving: boolean;
-  onStartEdit: (c: AdminComment) => void;
-  onCancelEdit: () => void;
-  onSaveEdit: (id: string, content: string) => void;
-  onDelete: (id: string) => void;
-}) {
-  if (editingId === comment.id) {
-    return (
-      <CommentEditCard
-        editForm={editForm}
-        setEditForm={setEditForm}
-        saving={saving}
-        onCancelEdit={onCancelEdit}
-        onSaveEdit={(content) => onSaveEdit(comment.id, content)}
-      />
-    );
-  }
-
-  return (
-    <div className="rounded-xl border border-adm-border bg-adm-card p-3 sm:rounded-2xl sm:p-4">
-      <div className="flex items-start gap-3">
-        <div className="relative h-10 w-10 shrink-0 overflow-hidden rounded-lg bg-adm-input">
-          <Image
-            src={cravatarUrl(comment.email || "", 80)}
-            alt={comment.author}
-            fill
-            className="object-cover"
-            sizes="40px"
-            unoptimized
-          />
-        </div>
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
-            <span className="text-sm font-medium text-adm-text">{comment.author}</span>
-            <span className="text-xs text-adm-text-tertiary">{comment.email}</span>
-            {comment.website && (
-              <a
-                href={comment.website.startsWith("http") ? comment.website : `https://${comment.website}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-0.5 text-xs text-adm-text-secondary transition-colors hover:text-adm-primary"
-              >
-                <Link2 className="h-3 w-3" />
-                {comment.website}
-              </a>
-            )}
-            {comment.replyTo && (
-              <span className="text-xs text-adm-text-tertiary">
-                回复 <span className="text-adm-text-secondary">{comment.replyTo}</span>
-              </span>
-            )}
-          </div>
-
-          <div
-            className="mt-2 text-[15px] leading-6 text-adm-text-secondary"
-            dangerouslySetInnerHTML={{ __html: renderTextWithEmoji(comment.content) }}
-          />
-
-          <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-adm-text-tertiary">
-            <span>{new Date(comment.createdAt).toLocaleString("zh-CN")}</span>
-            {comment.region && (
-              <span>{comment.region}</span>
-            )}
-            {comment.post && (
-              <span className="truncate">
-                来自：{comment.post.author} · {truncate(stripHtml(comment.post.content), 30)}
-              </span>
-            )}
-          </div>
-
-          <div className="mt-3 flex gap-1.5">
-            <button
-              onClick={() => onStartEdit(comment)}
-              className="flex items-center gap-1 rounded-lg bg-adm-card-hover px-3 py-1.5 text-xs text-adm-text-secondary transition-colors hover:bg-adm-card-hover/80"
-            >
-              <Pencil className="h-3 w-3" />
-              编辑
-            </button>
-            <button
-              onClick={() => onDelete(comment.id)}
-              className="flex items-center gap-1 rounded-lg bg-adm-danger-bg px-3 py-1.5 text-xs text-adm-danger transition-colors hover:bg-adm-danger/10"
-            >
-              <Trash2 className="h-3 w-3" />
-              删除
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/** Edit card (shared by desktop detail and mobile) */
-function CommentEditCard({
-  editForm,
-  setEditForm,
-  saving,
-  onCancelEdit,
-  onSaveEdit,
-}: {
-  editForm: { author: string; email: string; website: string; content: string };
-  setEditForm: React.Dispatch<React.SetStateAction<{ author: string; email: string; website: string; content: string }>>;
-  saving: boolean;
-  onCancelEdit: () => void;
-  onSaveEdit: (content: string) => void;
-}) {
-  const editorRef = useRef<HTMLDivElement>(null);
-  const savedRange = useRef<Range | null>(null);
-  const [showEmoji, setShowEmoji] = useState(false);
-  const [emojiExpanded, setEmojiExpanded] = useState(false);
-
-  // 初始化：将短代码文本转为 HTML（表情以 img 显示）写入 contentEditable
-  // 组件每次进入编辑模式都会重新挂载，所以 [] 依赖即可
-  useEffect(() => {
-    const editor = editorRef.current;
-    if (!editor) return;
-    editor.innerHTML = shortcodeToHtml(editForm.content);
-    const text = editableToShortcode(editor);
-    editor.setAttribute("data-empty", text ? "false" : "true");
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const saveSelection = useCallback(() => {
-    const sel = window.getSelection();
-    if (sel && sel.rangeCount > 0) {
-      const range = sel.getRangeAt(0);
-      if (editorRef.current && editorRef.current.contains(range.commonAncestorContainer)) {
-        savedRange.current = range.cloneRange();
-      }
-    }
-  }, []);
-
-  const restoreSelection = useCallback(() => {
-    const range = savedRange.current;
-    if (!range) return;
-    const sel = window.getSelection();
-    if (!sel) return;
-    sel.removeAllRanges();
-    sel.addRange(range);
-  }, []);
-
-  const syncContent = useCallback(() => {
-    const editor = editorRef.current;
-    if (!editor) return;
-    const text = editableToShortcode(editor);
-    setEditForm((prev) => ({ ...prev, content: text }));
-    const isEmpty = !text;
-    editor.setAttribute("data-empty", isEmpty ? "true" : "false");
-    if (isEmpty && editor.innerHTML !== "") {
-      editor.innerHTML = "";
-      savedRange.current = null;
-    }
-  }, [setEditForm]);
-
-  const insertEmoji = (name: string) => {
-    const item = EMOJI_LIST.find((e) => e.name === name);
-    if (!item) return;
-    const editor = editorRef.current;
-    if (!editor) return;
-    editor.focus();
-    if (!savedRange.current) {
-      const range = document.createRange();
-      range.selectNodeContents(editor);
-      range.collapse(false);
-      const sel = window.getSelection();
-      sel?.removeAllRanges();
-      sel?.addRange(range);
-    } else {
-      restoreSelection();
-    }
-    const imgHtml = emojiImgTag(name);
-    document.execCommand("insertHTML", false, imgHtml);
-    requestAnimationFrame(() => saveSelection());
-    syncContent();
-  };
-
-  const handleSave = () => {
-    const editor = editorRef.current;
-    const text = editor ? editableToShortcode(editor) : editForm.content;
-    onSaveEdit(text);
-  };
-
-  return (
-    <div className="rounded-2xl border border-adm-border bg-adm-card p-4">
-      <div className="space-y-2">
-        <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-          <input
-            type="text"
-            value={editForm.author}
-            onChange={(e) => setEditForm({ ...editForm, author: e.target.value })}
-            placeholder="昵称"
-            className="rounded-lg border border-adm-border bg-adm-input px-2.5 py-1.5 text-sm text-adm-text focus:border-adm-text-secondary focus:outline-none"
-          />
-          <input
-            type="email"
-            value={editForm.email}
-            onChange={(e) => setEditForm({ ...editForm, email: e.target.value })}
-            placeholder="邮箱"
-            className="rounded-lg border border-adm-border bg-adm-input px-2.5 py-1.5 text-sm text-adm-text focus:border-adm-text-secondary focus:outline-none"
-          />
-          <input
-            type="text"
-            value={editForm.website}
-            onChange={(e) => setEditForm({ ...editForm, website: e.target.value })}
-            placeholder="网址"
-            className="rounded-lg border border-adm-border bg-adm-input px-2.5 py-1.5 text-sm text-adm-text focus:border-adm-text-secondary focus:outline-none"
-          />
-        </div>
-        <div className="rounded-lg border border-adm-border bg-adm-input">
-          <div className="relative">
-            <div
-              ref={editorRef}
-              contentEditable
-              suppressContentEditableWarning
-              data-empty="true"
-              data-placeholder="评论内容"
-              onInput={syncContent}
-              onKeyUp={saveSelection}
-              onMouseUp={saveSelection}
-              className="comment-editor w-full min-h-[72px] resize-none px-2.5 py-1.5 pr-8 text-[15px] leading-6 text-adm-text focus:outline-none"
-            />
-            <button
-              type="button"
-              onMouseDown={(e) => e.preventDefault()}
-              onClick={() => {
-                saveSelection();
-                const next = !showEmoji;
-                setShowEmoji(next);
-                if (next) setEmojiExpanded(false);
-              }}
-              className={`absolute bottom-1.5 right-1.5 transition-colors ${showEmoji ? "text-adm-primary" : "text-adm-text-tertiary hover:text-adm-text-secondary"}`}
-              aria-label="表情"
-            >
-              <Smile className="h-4 w-4" />
-            </button>
-          </div>
-          {showEmoji && (
-            <div className="border-t border-adm-border px-2 py-2 animate-emoji-fade-in">
-              <div
-                className="grid grid-cols-6 place-items-center gap-1 overflow-y-auto min-[360px]:grid-cols-8 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
-                style={{ maxHeight: emojiExpanded ? "220px" : "none" }}
-              >
-                {(emojiExpanded ? EMOJI_LIST : EMOJI_LIST.slice(0, 20)).map((emoji) => (
-                  <button
-                    key={emoji.file}
-                    type="button"
-                    onClick={() => insertEmoji(emoji.name)}
-                    className="flex h-8 w-8 items-center justify-center rounded-md transition-colors hover:bg-adm-card-hover"
-                    title={emoji.name}
-                  >
-                    <img
-                      src={emoji.url}
-                      alt={emoji.name}
-                      className="inline-emoji h-6 w-6"
-                      loading="lazy"
-                    />
-                  </button>
-                ))}
-                {EMOJI_LIST.length > 20 && (
-                  <button
-                    type="button"
-                    onClick={() => setEmojiExpanded((v) => !v)}
-                    className="flex h-8 w-8 items-center justify-center rounded-md text-adm-text-tertiary transition-colors hover:bg-adm-card-hover"
-                    title={emojiExpanded ? "收起" : "展开全部"}
-                    aria-label={emojiExpanded ? "收起表情" : "展开全部表情"}
-                  >
-                    {emojiExpanded ? (
-                      <ChevronUp className="h-4 w-4" />
-                    ) : (
-                      <ChevronDown className="h-4 w-4" />
-                    )}
-                  </button>
-                )}
-              </div>
-            </div>
-          )}
-        </div>
-        <div className="flex justify-end gap-1.5">
-          <button
-            onClick={onCancelEdit}
-            className="flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs text-adm-text-secondary transition-colors hover:bg-adm-card-hover"
-          >
-            <X className="h-3 w-3" />
-            取消
-          </button>
-          <button
-            onClick={handleSave}
-            disabled={saving}
-            className="flex items-center gap-1 rounded-lg bg-adm-primary px-3 py-1.5 text-xs font-medium text-adm-primary-text transition-opacity hover:opacity-90 disabled:opacity-50"
-          >
-            <Check className="h-3 w-3" />
-            保存
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/** Mobile comment card (single column) */
-function CommentMobileCard({
-  comment,
-  onStartEdit,
-  onDelete,
-  deleting,
-}: {
-  comment: AdminComment;
-  onStartEdit: (c: AdminComment) => void;
-  onDelete: (id: string) => void;
-  deleting: boolean;
-}) {
-  return (
-    <div className="overflow-hidden rounded-xl border border-adm-border bg-adm-card">
-      <div className="flex items-start gap-2.5 p-3">
-        <div className="relative h-9 w-9 shrink-0 overflow-hidden rounded-lg bg-adm-input">
-          <Image
-            src={cravatarUrl(comment.email || "", 72)}
-            alt={comment.author}
-            fill
-            className="object-cover"
-            sizes="36px"
-            unoptimized
-          />
-        </div>
-        <div className="min-w-0 flex-1 space-y-1.5">
-          <div className="min-w-0">
-            <div className="flex min-w-0 items-center gap-2">
-              <span className="shrink-0 text-sm font-medium text-adm-text">
-                {comment.author}
-              </span>
-              <span className="min-w-0 truncate text-xs text-adm-text-tertiary">
-                {comment.email}
-              </span>
-            </div>
-            {comment.website && (
-              <a
-                href={comment.website.startsWith("http") ? comment.website : `https://${comment.website}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="mt-0.5 flex min-w-0 items-center gap-0.5 text-xs text-adm-text-secondary transition-colors hover:text-adm-primary"
-              >
-                <Link2 className="h-3 w-3 shrink-0" />
-                <span className="truncate">{comment.website}</span>
-              </a>
-            )}
-            {comment.replyTo && (
-              <span className="mt-0.5 block text-xs text-adm-text-tertiary">
-                回复 <span className="text-adm-text-secondary">{comment.replyTo}</span>
-              </span>
-            )}
-          </div>
-
-          <p
-            className="text-[15px] leading-6 text-adm-text-secondary break-words"
-            dangerouslySetInnerHTML={{ __html: renderTextWithEmoji(comment.content) }}
-          />
-
-          <div className="space-y-1 text-[11px] text-adm-text-tertiary">
-            <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-              <span className="whitespace-nowrap">
-                {new Date(comment.createdAt).toLocaleString("zh-CN")}
-              </span>
-              {comment.region && (
-                <span>{comment.region}</span>
-              )}
-            </div>
-            {comment.post && (
-              <p className="line-clamp-1 rounded bg-adm-input px-2 py-1">
-                来自：{comment.post.author} · {truncate(stripHtml(comment.post.content), 40)}
-              </p>
-            )}
-          </div>
-        </div>
-      </div>
-      <div className="grid grid-cols-2 border-t border-adm-border bg-adm-card-hover/30 p-1.5">
-        <button
-          type="button"
-          onClick={() => onStartEdit(comment)}
-          disabled={deleting}
-          className="flex items-center justify-center gap-1 rounded-lg py-2 text-xs text-adm-text-secondary transition-colors hover:bg-adm-card-hover disabled:opacity-50"
-        >
-          <Pencil className="h-3.5 w-3.5" />
-          编辑
-        </button>
-        <button
-          type="button"
-          onClick={() => onDelete(comment.id)}
-          disabled={deleting}
-          className="flex items-center justify-center gap-1 rounded-lg py-2 text-xs text-adm-danger transition-colors hover:bg-adm-danger-bg disabled:cursor-wait disabled:opacity-50"
-        >
-          {deleting ? (
-            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-          ) : (
-            <Trash2 className="h-3.5 w-3.5" />
-          )}
-          {deleting ? "删除中" : "删除"}
-        </button>
-      </div>
-    </div>
   );
 }

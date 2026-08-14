@@ -21,6 +21,12 @@ export const DEFAULT_AI_PROMPTS: Record<AiMode, string> = {
     "请根据主题和要求写一篇结构完整、表达自然的中文文章。第一行必须是且只能是一个 Markdown 一级标题（# 标题），随后直接给出 Markdown 正文，不要解释。\n主题：{{topic}}\n参考标题：{{title}}\n写作要求：{{requirements}}",
 };
 
+export const DEFAULT_COMMENT_REPLY_PROMPT =
+  "请以博主本人自然、友好的口吻回复评论。结合原文与同一评论线程的上下文，直接给出回复正文，不要解释身份，不要使用 Markdown 标题。\n\n原文标题：{{postTitle}}\n原文：{{postContent}}\n对话：\n{{thread}}\n\n当前评论者：{{author}}\n当前评论：{{comment}}";
+
+export const DEFAULT_COMMENT_MODERATION_PROMPT =
+  "审核下面的博客评论。明显正常友善的内容选择 approve；明显包含垃圾广告、辱骂骚扰、违法危险内容或恶意灌水的选择 reject；语义不清、需要结合事实判断或你不确定时选择 manual。只返回 JSON：{\"decision\":\"approve|reject|manual\",\"reason\":\"简短中文原因\"}。\n\n原文标题：{{postTitle}}\n原文：{{postContent}}\n评论者：{{author}}\n评论：{{content}}";
+
 export async function ensureAiSetting(): Promise<AiSetting> {
   const [setting] = await AiSetting.findOrCreate({ where: { id: 1 }, defaults: { id: 1 } });
   return setting;
@@ -87,6 +93,42 @@ async function getRuntimeConfig(requireEnabled = true) {
   if (!setting.apiKeyEncrypted) throw new Error("尚未配置 API Key");
   if (!setting.model.trim()) throw new Error("尚未配置模型");
   return { setting, apiKey: decryptAiSecret(setting.apiKeyEncrypted) };
+}
+
+export async function requestAiText(args: {
+  messages: Array<{ role: "system" | "user" | "assistant"; content: string }>;
+  temperature?: number;
+  maxTokens?: number;
+  timeoutMs?: number;
+}): Promise<{ model: string; text: string }> {
+  const { setting, apiKey } = await getRuntimeConfig();
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), args.timeoutMs || 60000);
+  try {
+    const response = await fetch(completionUrl(setting.baseUrl), {
+      method: "POST",
+      redirect: "error",
+      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: setting.model,
+        messages: args.messages,
+        temperature: args.temperature ?? setting.temperature,
+        max_tokens: Math.min(args.maxTokens ?? setting.maxTokens, setting.maxTokens),
+        stream: false,
+      }),
+      signal: controller.signal,
+    });
+    if (!response.ok) throw new Error(safeUpstreamMessage(response.status));
+    const data: any = await response.json();
+    const text = getTextContent(data).trim();
+    if (!text) throw new Error("AI 服务未返回文本内容");
+    return { model: data?.model || setting.model, text };
+  } catch (error) {
+    if ((error as Error).name === "AbortError") throw new Error("AI 服务连接超时");
+    throw error;
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 export async function testAiConnection(): Promise<{ model: string; latencyMs: number; text: string }> {

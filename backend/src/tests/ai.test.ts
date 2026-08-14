@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { decryptAiSecret, encryptAiSecret, isAiEncryptionReady, maskApiKey } from "../utils/ai-crypto";
 import { buildAiPrompt, normalizeBaseUrl, parseFullArticle, readChatCompletionResponse } from "../services/ai-service";
+import { commentAiInternals } from "../services/comment-ai-service";
 
 test("AI secret encryption round-trip and masking", () => {
   process.env.AI_CONFIG_ENCRYPTION_KEY = "a".repeat(64);
@@ -66,4 +67,40 @@ test("non-streaming compatible JSON falls back to one delta", async () => {
   const result = await readChatCompletionResponse(response, "fallback", 100, (text) => deltas.push(text));
   assert.deepEqual(deltas, ["一次返回"]);
   assert.deepEqual(result, { model: "json-model", text: "一次返回" });
+});
+
+test("comment moderation JSON is parsed strictly with markdown fence compatibility", () => {
+  assert.deepEqual(
+    commentAiInternals.parseModeration('```json\n{"decision":"manual","reason":"需要人工判断"}\n```'),
+    { decision: "manual", reason: "需要人工判断" }
+  );
+  assert.throws(
+    () => commentAiInternals.parseModeration('{"decision":"publish","reason":"bad"}'),
+    /decision/
+  );
+});
+
+test("comment thread context keeps root and target, follows nested replies, and respects limit", () => {
+  const make = (id: string, content: string, replyToId?: string, source: "visitor" | "admin" | "ai" = "visitor", minute = 0) => ({
+    id,
+    content,
+    replyToId,
+    source,
+    authorName: source === "visitor" ? `访客${id}` : "博主",
+    createdAt: new Date(2026, 0, 1, 0, minute),
+  });
+  const comments = [
+    make("root", "第一条"),
+    make("ai1", "第一次回复", "root", "ai", 1),
+    make("user2", "继续追问", "ai1", "visitor", 2),
+    make("ai2", "第二次回复", "user2", "ai", 3),
+    make("target", "最后问题", "ai2", "visitor", 4),
+    make("other", "另一个线程", undefined, "visitor", 5),
+  ] as any;
+  const thread = commentAiInternals.buildThread(comments, comments[4], 3);
+  assert.match(thread, /第一条/);
+  assert.match(thread, /第二次回复/);
+  assert.match(thread, /最后问题/);
+  assert.doesNotMatch(thread, /另一个线程/);
+  assert.equal(thread.split("\n").length, 3);
 });

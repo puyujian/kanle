@@ -52,7 +52,7 @@ function formatAd(post: any, meLiked = false) {
 
 const adIncludes: any[] = [
   { model: User, as: "author", attributes: ["id", "email", "username", "nickname", "avatar", "cover", "bio"] },
-  { model: Comment, as: "comments", separate: true, order: [["createdAt", "ASC"]] },
+  { model: Comment, as: "comments", where: { status: "published" }, required: false, separate: true, order: [["createdAt", "ASC"]] },
   { model: Like, as: "likes", include: [{ model: User, as: "user", attributes: ["email"], required: false }] },
 ];
 

@@ -7,8 +7,7 @@ import { cravatarUrl } from "@/lib/avatar";
 import { getCurrentUser, CurrentUser } from "@/lib/auth";
 import { X, Smile, ChevronDown, ChevronUp } from "lucide-react";
 import { EMOJI_LIST, editableToShortcode } from "@/lib/emoji";
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000/api";
+import { apiFetch } from "@/lib/api-fetch";
 
 interface CommentSectionProps {
   postId: string;
@@ -43,7 +42,6 @@ export default function CommentSection({
   connected = false,
   autoFocus = false,
 }: CommentSectionProps) {
-  const [comments, setComments] = useState<Comment[]>(initialComments);
   const [content, setContent] = useState("");
   const [replyTo, setReplyTo] = useState<string | undefined>(initialReplyTo);
   // replyTo 存储父评论 ID；显示用名字需用 ID 查找
@@ -55,6 +53,7 @@ export default function CommentSection({
   const [emojiExpanded, setEmojiExpanded] = useState(false);
   // 仅用于网络/服务端失败的提示（输入校验交给浏览器原生 form 验证）
   const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
 
   // 当前用户（登录博主 / 游客 / null）
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
@@ -69,13 +68,10 @@ export default function CommentSection({
   const savedRange = useRef<Range | null>(null);
   const formRef = useRef<HTMLFormElement>(null);
 
-  useEffect(() => {
-    setComments(initialComments);
-  }, [initialComments]);
-
   // 同步外部传入的回复目标，并同步聚焦输入框（useLayoutEffect 保证在用户手势栈内）
   useLayoutEffect(() => {
     if (initialReplyTo) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setReplyTo(initialReplyTo);
       editorRef.current?.focus();
     }
@@ -91,6 +87,7 @@ export default function CommentSection({
 
   useEffect(() => {
     const user = getCurrentUser();
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setCurrentUser(user);
     if (user && !user.isLoggedIn) {
       setFormNickname(user.nickname);
@@ -141,9 +138,10 @@ export default function CommentSection({
     }
 
     setError("");
+    setNotice("");
     setSubmitting(true);
     try {
-      const res = await fetch(`${API_URL}/posts/${postId}/comments`, {
+      const res = await apiFetch(`/posts/${postId}/comments`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -167,13 +165,17 @@ export default function CommentSection({
         return;
       }
       const newComment = await res.json();
-      setComments((prev) => [...prev, newComment]);
-      onCommentAdded?.(newComment);
+      const pending = res.status === 202 || newComment.status === "pending";
+      if (!pending) {
+        onCommentAdded?.(newComment);
+      } else {
+        setNotice(newComment.message || "评论已提交，审核通过后显示");
+      }
 
       // 游客填写昵称后，更新其历史点赞的显示名（从"访客"变为昵称）
       if (!currentUser?.isLoggedIn && authorName && authorEmail) {
         try {
-          await fetch(`${API_URL}/posts/likes/update-name`, {
+          await apiFetch("/posts/likes/update-name", {
             method: "PUT",
             headers: { "Content-Type": "application/json" },
             credentials: "include", // 携带 visitorId cookie 用于维度升级
@@ -516,6 +518,8 @@ export default function CommentSection({
         <span className="text-[13px] text-wechat-time">
           {error ? (
             <span className="text-red-500 dark:text-red-400">{error}</span>
+          ) : notice ? (
+            <span className="text-[#07c160] dark:text-green-400">{notice}</span>
           ) : content.length > 0 ? (
             `${content.length} 字`
           ) : (

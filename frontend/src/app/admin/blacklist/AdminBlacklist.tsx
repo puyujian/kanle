@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import {
   ShieldBan, ShieldCheck, Trash2, Plus, Mail, Globe, Clock, Infinity as InfinityIcon,
-  Search, AlertTriangle, Loader2, X, ShieldAlert,
+  Search, AlertTriangle, Loader2, X, ShieldAlert, Bot, UserCheck, CircleOff,
 } from "lucide-react";
 import { apiFetch, getToken } from "@/lib/api-fetch";
 
@@ -55,6 +55,9 @@ export default function AdminBlacklist() {
   const [adding, setAdding] = useState(false);
   const [formError, setFormError] = useState("");
   const [switching, setSwitching] = useState(false);
+  const [reviewMode, setReviewMode] = useState<"off" | "manual" | "ai">("off");
+  const [aiAvailable, setAiAvailable] = useState(false);
+  const [savingReview, setSavingReview] = useState(false);
 
   // 违禁词管理
   const [bannedWords, setBannedWords] = useState<string[]>([]);
@@ -71,11 +74,14 @@ export default function AdminBlacklist() {
       apiFetch("/admin/blacklist").then((r) => r.json()),
       apiFetch("/admin/blacklist/status").then((r) => r.json()),
       apiFetch("/admin/blacklist/banned-words").then((r) => r.json()),
+      apiFetch("/admin/blacklist/comment-review").then((r) => r.json()),
     ])
-      .then(([blist, st, bw]) => {
+      .then(([blist, st, bw, review]) => {
         setList(Array.isArray(blist) ? blist : []);
         setEnabled(st?.enabled ?? true);
         setBannedWords(Array.isArray(bw?.words) ? bw.words : []);
+        setReviewMode(review?.mode || "off");
+        setAiAvailable(!!review?.aiAvailable);
       })
       .catch(() => {
         setList([]);
@@ -88,6 +94,7 @@ export default function AdminBlacklist() {
       router.replace("/");
       return;
     }
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchAll();
   }, [router, token, fetchAll]);
 
@@ -110,6 +117,26 @@ export default function AdminBlacklist() {
       alert("网络错误，请重试");
     } finally {
       setSwitching(false);
+    }
+  };
+
+  const handleReviewMode = async (mode: "off" | "manual" | "ai") => {
+    if (mode === reviewMode || savingReview) return;
+    setSavingReview(true);
+    try {
+      const res = await apiFetch("/admin/blacklist/comment-review", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mode }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.message || "保存审核模式失败");
+      setReviewMode(data.mode);
+      setAiAvailable(!!data.aiAvailable);
+    } catch (error) {
+      alert(error instanceof Error ? error.message : "保存审核模式失败");
+    } finally {
+      setSavingReview(false);
     }
   };
 
@@ -294,6 +321,44 @@ export default function AdminBlacklist() {
             <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
             <span>当前处于关闭状态，存在被刷评论的风险，建议保持开启。</span>
           </div>
+        )}
+      </div>
+
+      {/* 评论审核 */}
+      <div className="rounded-xl border border-adm-border bg-adm-card p-3 sm:rounded-2xl sm:p-4">
+        <div className="mb-3">
+          <h3 className="text-sm font-semibold text-adm-text">评论审核</h3>
+          <p className="mt-1 text-xs text-adm-text-secondary">审核适用于动态、文章和广告；未发布评论不会出现在前台、通知或邮件中。</p>
+        </div>
+        <div className="grid gap-2 md:grid-cols-3">
+          {([
+            { mode: "off" as const, label: "关闭审核", desc: "评论通过防刷检查后立即发布", icon: CircleOff },
+            { mode: "manual" as const, label: "人工审核", desc: "每条访客评论进入待审核列表", icon: UserCheck },
+            { mode: "ai" as const, label: "AI 审核", desc: "安全通过、违规拒绝、存疑转人工", icon: Bot },
+          ]).map((item) => {
+            const Icon = item.icon;
+            const disabled = savingReview || (item.mode === "ai" && !aiAvailable && reviewMode !== "ai");
+            return (
+              <button
+                key={item.mode}
+                disabled={disabled}
+                onClick={() => void handleReviewMode(item.mode)}
+                className={`rounded-xl border p-3 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${reviewMode === item.mode ? "border-adm-primary bg-adm-primary/5" : "border-adm-border bg-adm-input/30 hover:bg-adm-card-hover"}`}
+              >
+                <div className="flex items-center gap-2">
+                  <Icon className={`h-4 w-4 ${reviewMode === item.mode ? "text-adm-primary" : "text-adm-text-tertiary"}`} />
+                  <span className="text-sm font-medium text-adm-text">{item.label}</span>
+                  {reviewMode === item.mode && <span className="ml-auto h-2 w-2 rounded-full bg-green-500" />}
+                </div>
+                <p className="mt-1.5 text-xs leading-5 text-adm-text-secondary">{item.desc}</p>
+              </button>
+            );
+          })}
+        </div>
+        {!aiAvailable && (
+          <p className="mt-3 rounded-lg bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-300">
+            AI 审核暂不可选，请先前往“AI 配置”启用服务并保存有效的模型与 API Key。
+          </p>
         )}
       </div>
 

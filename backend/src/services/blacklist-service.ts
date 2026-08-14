@@ -132,6 +132,7 @@ class BlacklistService {
   // ===== 评论防刷总开关 =====
   private enabledCache: { value: boolean; cachedAt: number } | null = null;
   private readonly ENABLED_TTL = 30 * 1000;
+  private reviewModeCache: { value: "off" | "manual" | "ai"; cachedAt: number } | null = null;
 
   /**
    * 查询评论防刷总开关（限流 + 黑名单是否生效）。
@@ -154,11 +155,26 @@ class BlacklistService {
 
   /** 更新评论防刷开关，立即失效缓存 */
   async setAntiSpamEnabled(enabled: boolean): Promise<void> {
-    const setting = await SiteSetting.findByPk(1);
-    if (!setting) return;
+    const [setting] = await SiteSetting.findOrCreate({ where: { id: 1 }, defaults: { id: 1 } });
     setting.commentAntiSpamEnabled = enabled;
     await setting.save();
     this.invalidateEnabledCache();
+  }
+
+  async getCommentReviewMode(): Promise<"off" | "manual" | "ai"> {
+    if (this.reviewModeCache && Date.now() - this.reviewModeCache.cachedAt < this.ENABLED_TTL) {
+      return this.reviewModeCache.value;
+    }
+    const setting = await SiteSetting.findByPk(1);
+    const value = setting?.commentReviewMode || "off";
+    this.reviewModeCache = { value, cachedAt: Date.now() };
+    return value;
+  }
+
+  async setCommentReviewMode(mode: "off" | "manual" | "ai"): Promise<void> {
+    const [setting] = await SiteSetting.findOrCreate({ where: { id: 1 }, defaults: { id: 1 } });
+    await setting.update({ commentReviewMode: mode });
+    this.reviewModeCache = null;
   }
 }
 

@@ -25,6 +25,8 @@ export interface Comment {
   isAuthor?: boolean;
   /** 评论发布者的省份（IP 反查得到，仅显示用） */
   region?: string;
+  /** 公开接口只返回 published；提交响应会携带状态用于兼容审核流程。 */
+  status?: "pending" | "draft" | "published" | "rejected";
 }
 
 export interface PostMusic {

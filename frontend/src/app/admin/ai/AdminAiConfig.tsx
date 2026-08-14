@@ -5,25 +5,32 @@ import { Check, Eye, EyeOff, KeyRound, Loader2, RotateCcw, Save, Sparkles, TestT
 import { apiFetch } from "@/lib/api-fetch";
 import type { AiMode } from "@/lib/ai-client";
 
+type AiPromptMode = AiMode | "comment_reply" | "comment_moderation";
+
 interface AiConfig {
   enabled: boolean;
   baseUrl: string;
   model: string;
   temperature: number;
   maxTokens: number;
+  commentReplyEnabled: boolean;
+  commentReplyPublishMode: "draft" | "published";
+  commentContextLimit: number;
   apiKeyConfigured: boolean;
   apiKeyMasked: string;
   encryptionReady: boolean;
-  prompts: Record<AiMode, string>;
-  defaultPrompts: Record<AiMode, string>;
+  prompts: Record<AiPromptMode, string>;
+  defaultPrompts: Record<AiPromptMode, string>;
 }
 
-const MODE_LABELS: Array<{ mode: AiMode; label: string; help: string }> = [
+const MODE_LABELS: Array<{ mode: AiPromptMode; label: string; help: string }> = [
   { mode: "moment_polish", label: "动态润色", help: "可用变量：{{content}}" },
   { mode: "article_outline", label: "文章大纲", help: "可用变量：{{topic}}、{{title}}、{{requirements}}" },
   { mode: "article_continue", label: "文章续写", help: "可用变量：{{content}}、{{title}}、{{requirements}}" },
   { mode: "article_polish", label: "文章润色", help: "可用变量：{{content}}、{{title}}、{{requirements}}" },
   { mode: "article_full", label: "完整文章", help: "可用变量：{{topic}}、{{title}}、{{requirements}}" },
+  { mode: "comment_reply", label: "评论自动回复", help: "可用变量：{{postTitle}}、{{postContent}}、{{thread}}、{{author}}、{{comment}}" },
+  { mode: "comment_moderation", label: "评论 AI 审核", help: "可用变量：{{postTitle}}、{{postContent}}、{{author}}、{{content}}" },
 ];
 
 export default function AdminAiConfig() {
@@ -61,6 +68,9 @@ export default function AdminAiConfig() {
           model: config.model,
           temperature: Number(config.temperature),
           maxTokens: Number(config.maxTokens),
+          commentReplyEnabled: config.commentReplyEnabled,
+          commentReplyPublishMode: config.commentReplyPublishMode,
+          commentContextLimit: Number(config.commentContextLimit),
           prompts: config.prompts,
           ...(apiKey.trim() ? { apiKey: apiKey.trim() } : {}),
           ...(clearApiKey ? { clearApiKey: true } : {}),
@@ -169,6 +179,38 @@ export default function AdminAiConfig() {
           {testResult && <span className={`text-sm ${testResult.success ? "text-green-600" : "text-red-500"}`}>{testResult.message}{testResult.model ? ` · ${testResult.model}` : ""}{testResult.latencyMs ? ` · ${testResult.latencyMs}ms` : ""}</span>}
         </div>
         <p className="mt-2 text-[11px] text-adm-text-tertiary">切换开启状态后，请点击“保存配置”使设置生效。</p>
+      </section>
+
+      <section className="rounded-2xl border border-adm-border bg-adm-card p-5 shadow-sm">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h3 className="font-semibold text-adm-text">评论自动回复</h3>
+            <p className="mt-1 text-xs text-adm-text-tertiary">仅回复动态和文章中已经发布的访客评论；管理员、AI 与广告评论不会触发。</p>
+          </div>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={config.commentReplyEnabled}
+            onClick={() => setConfig({ ...config, commentReplyEnabled: !config.commentReplyEnabled })}
+            className={`relative h-6 w-11 shrink-0 rounded-full transition-colors ${config.commentReplyEnabled ? "bg-violet-600" : "bg-black/15 dark:bg-white/20"}`}
+          >
+            <span className={`absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${config.commentReplyEnabled ? "translate-x-5" : "translate-x-0"}`} />
+          </button>
+        </div>
+        <div className="mt-5 grid gap-4 md:grid-cols-2">
+          <Field label="回复发布方式">
+            <div className="grid grid-cols-2 gap-2">
+              {([{"value":"draft","label":"先存草稿"},{"value":"published","label":"直接发布"}] as const).map((item) => (
+                <button key={item.value} type="button" onClick={() => setConfig({ ...config, commentReplyPublishMode: item.value })} className={`rounded-lg border px-3 py-2 text-sm ${config.commentReplyPublishMode === item.value ? "border-violet-500 bg-violet-500/10 text-violet-600 dark:text-violet-400" : "border-adm-border text-adm-text-secondary"}`}>{item.label}</button>
+              ))}
+            </div>
+          </Field>
+          <Field label={`上下文消息数：${config.commentContextLimit || 10}`} help="范围 1–20，默认 10；系统还会自动限制原文与总字符数。">
+            <input type="range" min="1" max="20" step="1" value={config.commentContextLimit || 10} onChange={(e) => setConfig({ ...config, commentContextLimit: Number(e.target.value) })} className="w-full accent-violet-600" />
+          </Field>
+        </div>
+        {!config.enabled && config.commentReplyEnabled && <p className="mt-3 text-xs text-amber-600 dark:text-amber-400">全局 AI 功能尚未开启，保存后自动回复仍不会执行。</p>}
+        <p className="mt-3 text-[11px] text-adm-text-tertiary">修改后请点击上方“保存配置”使设置生效。</p>
       </section>
 
       <section className="rounded-2xl border border-adm-border bg-adm-card p-5 shadow-sm">

@@ -14,6 +14,11 @@ export interface AiSettingAttributes {
   articleContinuePrompt: string;
   articlePolishPrompt: string;
   articleFullPrompt: string;
+  commentReplyEnabled: boolean;
+  commentReplyPublishMode: "draft" | "published";
+  commentContextLimit: number;
+  commentReplyPrompt: string;
+  commentModerationPrompt: string;
 }
 
 type AiSettingCreationAttributes = Optional<AiSettingAttributes, keyof AiSettingAttributes>;
@@ -34,6 +39,11 @@ class AiSetting
   declare articleContinuePrompt: string;
   declare articlePolishPrompt: string;
   declare articleFullPrompt: string;
+  declare commentReplyEnabled: boolean;
+  declare commentReplyPublishMode: "draft" | "published";
+  declare commentContextLimit: number;
+  declare commentReplyPrompt: string;
+  declare commentModerationPrompt: string;
 }
 
 AiSetting.init(
@@ -50,6 +60,11 @@ AiSetting.init(
     articleContinuePrompt: { type: DataTypes.TEXT, allowNull: false, defaultValue: "" },
     articlePolishPrompt: { type: DataTypes.TEXT, allowNull: false, defaultValue: "" },
     articleFullPrompt: { type: DataTypes.TEXT, allowNull: false, defaultValue: "" },
+    commentReplyEnabled: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
+    commentReplyPublishMode: { type: DataTypes.ENUM("draft", "published"), allowNull: false, defaultValue: "draft" },
+    commentContextLimit: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 10 },
+    commentReplyPrompt: { type: DataTypes.TEXT, allowNull: false, defaultValue: "" },
+    commentModerationPrompt: { type: DataTypes.TEXT, allowNull: false, defaultValue: "" },
   },
   { sequelize, tableName: "ai_settings" }
 );

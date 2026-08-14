@@ -1,10 +1,14 @@
 import { Router, Response } from "express";
 import bcrypt from "bcryptjs";
 import { body, param, validationResult } from "express-validator";
+import { Op } from "sequelize";
 import sequelize from "../config/database";
-import { User, Post, Comment, Like, SiteSetting } from "../models";
+import { User, Post, Comment, CommentLike, CommentAiJob, Like, SiteSetting, AiSetting } from "../models";
 import { authenticate, requireAdmin, AuthRequest } from "../middleware/auth";
 import { blacklistService } from "../services/blacklist-service";
+import { publishComment, retryCommentAiJob } from "../services/comment-ai-service";
+import { triggerRevalidate } from "../utils/revalidate";
+import { decryptAiSecret, isAiEncryptionReady } from "../utils/ai-crypto";
 
 const router = Router();
 
@@ -15,7 +19,7 @@ router.get("/dashboard", authenticate, requireAdmin, async (_req: AuthRequest, r
     User.count(),
     Post.count({ where: { isAd: false, type: "moment" } }),
     Post.count({ where: { isAd: false, type: "article" } }),
-    Comment.count(),
+    Comment.count({ where: { status: "published" } }),
     Like.count(),
   ]);
 
@@ -26,7 +30,7 @@ router.get("/dashboard", authenticate, requireAdmin, async (_req: AuthRequest, r
       d.date,
       (SELECT COUNT(*) FROM posts    WHERE DATE(created_at) = d.date AND is_ad = 0 AND type = 'moment')  AS moments,
       (SELECT COUNT(*) FROM posts    WHERE DATE(created_at) = d.date AND is_ad = 0 AND type = 'article') AS articles,
-      (SELECT COUNT(*) FROM comments WHERE DATE(created_at) = d.date)              AS comments,
+      (SELECT COUNT(*) FROM comments WHERE DATE(created_at) = d.date AND status = 'published') AS comments,
       (SELECT COUNT(*) FROM likes    WHERE DATE(created_at) = d.date)              AS likes
     FROM (
       SELECT CURDATE() - INTERVAL n DAY AS date
@@ -66,6 +70,7 @@ router.get("/dashboard", authenticate, requireAdmin, async (_req: AuthRequest, r
   // 最近 5 条评论（含所属动态作者和内容前 50 字）
   // 不按 isAd 过滤：评论无论在普通动态还是广告动态上都算评论，都应展示
   const recentCommentRows = await Comment.findAll({
+    where: { status: "published" },
     include: [{
       model: Post,
       as: "post",
@@ -254,7 +259,7 @@ router.post(
 
 // GET /api/admin/comments - list all comments with post info
 router.get("/comments", authenticate, requireAdmin, async (_req: AuthRequest, res: Response) => {
-  const comments = await Comment.findAll({
+  const [comments, grouped] = await Promise.all([Comment.findAll({
     include: [
       {
         model: Post,
@@ -264,12 +269,20 @@ router.get("/comments", authenticate, requireAdmin, async (_req: AuthRequest, re
           { model: User, as: "author", attributes: ["nickname"] },
         ],
       },
+      { model: CommentAiJob, as: "aiJobs", required: false },
     ],
     order: [["createdAt", "DESC"]],
-  });
+  }), Comment.findAll({
+    attributes: ["status", [sequelize.fn("COUNT", sequelize.col("id")), "count"]],
+    group: ["status"],
+    raw: true,
+  })]);
 
-  res.json(
-    comments.map((c) => ({
+  const counts: Record<string, number> = { all: comments.length, pending: 0, draft: 0, published: 0, rejected: 0 };
+  for (const row of grouped as any[]) counts[row.status] = Number(row.count) || 0;
+  res.json({
+    counts,
+    data: comments.map((c) => ({
       id: c.id,
       author: c.authorName,
       email: c.email,
@@ -278,7 +291,20 @@ router.get("/comments", authenticate, requireAdmin, async (_req: AuthRequest, re
       replyTo: c.replyTo,
       replyToId: c.replyToId,
       region: c.region || "",
+      status: c.status,
+      source: c.source,
+      reviewMethod: c.reviewMethod || null,
+      reviewReason: c.reviewReason || "",
+      reviewedAt: c.reviewedAt || null,
       createdAt: c.createdAt,
+      aiJobs: ((c as any).aiJobs || []).map((job: CommentAiJob) => ({
+        id: job.id,
+        type: job.type,
+        status: job.status,
+        attempts: job.attempts,
+        lastError: job.lastError || "",
+        resultCommentId: job.resultCommentId || null,
+      })),
       post: c.post
         ? {
             id: c.post.id,
@@ -286,9 +312,138 @@ router.get("/comments", authenticate, requireAdmin, async (_req: AuthRequest, re
             author: c.post.author?.nickname || "",
           }
         : null,
-    }))
-  );
+    })),
+  });
 });
+
+async function deleteCommentTrees(ids: string[]): Promise<number> {
+  const selected = await Comment.findAll({ where: { id: { [Op.in]: ids } }, attributes: ["id", "postId", "replyToId", "status"] });
+  if (!selected.length) return 0;
+  const postIds = [...new Set(selected.map((item) => item.postId))];
+  const all = await Comment.findAll({ where: { postId: { [Op.in]: postIds } }, attributes: ["id", "postId", "replyToId", "status"] });
+  const targets = new Set(selected.map((item) => item.id));
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const item of all) {
+      if (item.replyToId && targets.has(item.replyToId) && !targets.has(item.id)) {
+        targets.add(item.id);
+        changed = true;
+      }
+    }
+  }
+  const targetIds = [...targets];
+  const hadPublished = all.some((item) => targets.has(item.id) && item.status === "published");
+  await sequelize.transaction(async (transaction) => {
+    await CommentLike.destroy({ where: { commentId: { [Op.in]: targetIds } }, transaction });
+    await CommentAiJob.destroy({
+      where: { [Op.or]: [{ commentId: { [Op.in]: targetIds } }, { resultCommentId: { [Op.in]: targetIds } }] },
+      transaction,
+    });
+    await Comment.destroy({ where: { id: { [Op.in]: targetIds } }, transaction });
+  });
+  if (hadPublished) triggerRevalidate();
+  return targetIds.length;
+}
+
+async function applyCommentAction(comment: Comment, action: "approve" | "reject", adminId: string): Promise<boolean> {
+  if (action === "approve") {
+    if (!["pending", "draft", "rejected"].includes(comment.status)) return false;
+    return publishComment(comment, { method: "human", reason: "管理员审核通过", reviewedById: adminId });
+  }
+  if (!["pending", "draft"].includes(comment.status)) return false;
+  await comment.update({
+    status: "rejected",
+    reviewMethod: "human",
+    reviewReason: "管理员审核拒绝",
+    reviewedAt: new Date(),
+    reviewedById: adminId,
+  });
+  return true;
+}
+
+router.put(
+  "/comments/:id",
+  authenticate,
+  requireAdmin,
+  [
+    param("id").isUUID(),
+    body("author").trim().isLength({ min: 1, max: 100 }),
+    body("email").trim().isEmail().normalizeEmail(),
+    body("website").optional({ nullable: true }).trim().isLength({ max: 255 }),
+    body("content").trim().isLength({ min: 1, max: 5000 }),
+  ],
+  async (req: AuthRequest, res: Response) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) { res.status(400).json({ errors: errors.array() }); return; }
+    const comment = await Comment.findByPk(req.params.id as string);
+    if (!comment) { res.status(404).json({ message: "评论不存在" }); return; }
+    await comment.update({
+      authorName: req.body.author,
+      email: req.body.email,
+      website: req.body.website || null,
+      content: req.body.content,
+    });
+    if (comment.status === "published") triggerRevalidate();
+    res.json({ author: comment.authorName, email: comment.email, website: comment.website, content: comment.content });
+  }
+);
+
+router.patch(
+  "/comments/:id/status",
+  authenticate,
+  requireAdmin,
+  [param("id").isUUID(), body("action").isIn(["approve", "reject"])],
+  async (req: AuthRequest, res: Response) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) { res.status(400).json({ errors: errors.array() }); return; }
+    const comment = await Comment.findByPk(req.params.id as string);
+    if (!comment) { res.status(404).json({ message: "评论不存在" }); return; }
+    const changed = await applyCommentAction(comment, req.body.action, req.user!.id);
+    if (!changed) { res.status(409).json({ message: "当前状态不能执行该操作" }); return; }
+    res.json({ id: comment.id, status: comment.status, reviewMethod: comment.reviewMethod, reviewReason: comment.reviewReason });
+  }
+);
+
+router.post(
+  "/comments/bulk",
+  authenticate,
+  requireAdmin,
+  [body("ids").isArray({ min: 1, max: 500 }), body("ids.*").isUUID(), body("action").isIn(["approve", "reject", "delete"])],
+  async (req: AuthRequest, res: Response) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) { res.status(400).json({ errors: errors.array() }); return; }
+    const ids = [...new Set(req.body.ids as string[])];
+    if (req.body.action === "delete") {
+      const deleted = await deleteCommentTrees(ids);
+      res.json({ updated: 0, deleted, skipped: Math.max(0, ids.length - deleted) });
+      return;
+    }
+    const comments = await Comment.findAll({ where: { id: { [Op.in]: ids } } });
+    let updated = 0;
+    for (const comment of comments) {
+      if (await applyCommentAction(comment, req.body.action, req.user!.id)) updated++;
+    }
+    res.json({ updated, deleted: 0, skipped: ids.length - updated });
+  }
+);
+
+router.post(
+  "/comments/:id/ai-retry",
+  authenticate,
+  requireAdmin,
+  [param("id").isUUID(), body("type").optional().isIn(["moderation", "reply"])],
+  async (req: AuthRequest, res: Response) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) { res.status(400).json({ errors: errors.array() }); return; }
+    try {
+      const job = await retryCommentAiJob(req.params.id as string, req.body.type);
+      res.json({ id: job.id, status: job.status, type: job.type });
+    } catch (error) {
+      res.status(409).json({ message: (error as Error).message });
+    }
+  }
+);
 
 // DELETE /api/admin/comments/:id - delete a comment
 router.delete(
@@ -309,7 +464,7 @@ router.delete(
       return;
     }
 
-    await comment.destroy();
+    await deleteCommentTrees([comment.id]);
     res.status(204).send();
   }
 );
@@ -351,6 +506,42 @@ router.put(
     }
     await blacklistService.setAntiSpamEnabled(req.body.enabled);
     res.json({ enabled: req.body.enabled });
+  }
+);
+
+async function aiRuntimeAvailable(): Promise<boolean> {
+  if (!isAiEncryptionReady()) return false;
+  const setting = await AiSetting.findByPk(1);
+  if (!setting?.enabled || !setting.model || !setting.apiKeyEncrypted) return false;
+  try {
+    return !!decryptAiSecret(setting.apiKeyEncrypted);
+  } catch {
+    return false;
+  }
+}
+
+router.get("/blacklist/comment-review", authenticate, requireAdmin, async (_req: AuthRequest, res: Response) => {
+  const [mode, aiAvailable] = await Promise.all([
+    blacklistService.getCommentReviewMode(),
+    aiRuntimeAvailable(),
+  ]);
+  res.json({ mode, aiAvailable });
+});
+
+router.put(
+  "/blacklist/comment-review",
+  authenticate,
+  requireAdmin,
+  body("mode").isIn(["off", "manual", "ai"]),
+  async (req: AuthRequest, res: Response) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) { res.status(400).json({ errors: errors.array() }); return; }
+    if (req.body.mode === "ai" && !(await aiRuntimeAvailable())) {
+      res.status(400).json({ message: "请先在 AI 配置中启用并完成模型与 API Key 配置" });
+      return;
+    }
+    await blacklistService.setCommentReviewMode(req.body.mode);
+    res.json({ mode: req.body.mode, aiAvailable: await aiRuntimeAvailable() });
   }
 );
 
