@@ -1,5 +1,6 @@
 import { Node, mergeAttributes } from "@tiptap/core";
 import { ReactNodeViewRenderer } from "@tiptap/react";
+import type { DOMOutputSpec } from "@tiptap/pm/model";
 import LinkCardNodeView from "../node-views/LinkCardNodeView";
 
 export interface LinkCardAttrs {
@@ -32,7 +33,7 @@ export const LinkCardNode = Node.create({
   },
 
   renderHTML({ node, HTMLAttributes }) {
-    const inner: any[] = [];
+    const inner: DOMOutputSpec[] = [];
     if (node.attrs.image) {
       inner.push([
         "span",
@@ -40,7 +41,7 @@ export const LinkCardNode = Node.create({
         ["img", { src: node.attrs.image, alt: "" }],
       ]);
     }
-    const bodyChildren: any[] = [["span", { class: "link-card-title" }, node.attrs.title]];
+    const bodyChildren: DOMOutputSpec[] = [["span", { class: "link-card-title" }, node.attrs.title]];
     if (node.attrs.description) {
       bodyChildren.push([
         "span",

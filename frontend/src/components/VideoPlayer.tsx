@@ -8,8 +8,6 @@ import { useAutoplayOnVisible } from "@/lib/use-autoplay-on-visible";
 import VideoPlayerModal from "./VideoPlayerModal";
 import CustomVideoPlayer from "./CustomVideoPlayer";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000/api";
-
 const PLATFORM_LABELS: Record<string, string> = {
   douyin: "抖音",
   kuaishou: "快手",
@@ -231,7 +229,7 @@ interface ParsedInlineVideoProps {
   onRefreshed: (fresh: PostVideo) => void;
 }
 
-function ParsedInlineVideo({ video, postId, fullWidth, onOpenModal, onRefreshed }: ParsedInlineVideoProps) {
+function ParsedInlineVideo({ video, fullWidth, onOpenModal }: ParsedInlineVideoProps) {
   const directUrl = toAbsoluteUrl(video.url || "");
   const cover = video.cover ? toAbsoluteUrl(video.cover) : undefined;
   const containerRef = useRef<HTMLDivElement>(null);

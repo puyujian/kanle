@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useMemo, useRef } from "react";
 import { NodeViewWrapper, type NodeViewProps } from "@tiptap/react";
 import {
   ImagePlus,
@@ -52,7 +52,7 @@ export default function ImageGroupNodeView({
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const replaceIndexRef = useRef<number | null>(null);
 
-  const images: ImageGroupItem[] = node.attrs.images || [];
+  const images: ImageGroupItem[] = useMemo(() => node.attrs.images || [], [node.attrs.images]);
   const layout: ImageGroupLayout = node.attrs.layout || "triple";
   const columns = layoutToColumns(layout);
   const maxImages = layoutMaxImages(layout);
@@ -158,13 +158,10 @@ export default function ImageGroupNodeView({
     fileInputRef.current?.click();
   }, []);
 
-  const handleSlotClick = useCallback(
-    (slotIndex: number) => {
-      replaceIndexRef.current = null;
-      fileInputRef.current?.click();
-    },
-    []
-  );
+  const handleSlotClick = useCallback(() => {
+    replaceIndexRef.current = null;
+    fileInputRef.current?.click();
+  }, []);
 
   const stopInteraction = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -280,7 +277,7 @@ export default function ImageGroupNodeView({
         >
           {images.map((img, i) => (
             <div key={i} className="image-group-item group relative">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
+              { }
               <img src={getImageUrl(img.src)} alt={img.alt} className="image-grid-item" />
               {showToolbar && (
                 <div className="absolute right-1 top-1 flex gap-1 opacity-0 transition-opacity group-hover:opacity-100">
@@ -313,7 +310,7 @@ export default function ImageGroupNodeView({
                 key={`slot-${i}`}
                 className="image-group-slot flex cursor-pointer items-center justify-center border-2 border-dashed border-gray-200 text-gray-300 transition-colors hover:border-gray-400 hover:text-gray-500 dark:border-white/10 dark:hover:border-white/30 dark:hover:text-gray-400"
                 onMouseDown={stopInteraction}
-                onClick={() => handleSlotClick(i)}
+                onClick={handleSlotClick}
               >
                 <Plus className="h-4 w-4" />
               </div>

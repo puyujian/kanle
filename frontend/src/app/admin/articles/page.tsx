@@ -159,7 +159,7 @@ export default function AdminArticlesPage() {
                   {/* Cover */}
                   <div className="h-[72px] w-24 shrink-0 overflow-hidden rounded-lg bg-adm-input sm:h-20 sm:w-32">
                     {article.cover || defaultCover ? (
-                      // eslint-disable-next-line @next/next/no-img-element
+
                       <img
                         src={toAbsoluteUrl(article.cover || defaultCover)}
                         alt={article.title}

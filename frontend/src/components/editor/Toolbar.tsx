@@ -25,7 +25,6 @@ import {
   ChevronDown,
   FileCode2,
   FileDown,
-  X,
   Music,
   Video,
   LayoutTemplate,

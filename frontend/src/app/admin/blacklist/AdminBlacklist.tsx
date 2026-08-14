@@ -94,7 +94,7 @@ export default function AdminBlacklist() {
       router.replace("/");
       return;
     }
-    // eslint-disable-next-line react-hooks/set-state-in-effect
+
     fetchAll();
   }, [router, token, fetchAll]);
 

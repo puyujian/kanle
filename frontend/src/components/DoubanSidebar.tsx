@@ -319,7 +319,7 @@ export default function DoubanSidebar({
                 rel="noopener noreferrer"
                 className="group flex items-start gap-2.5 rounded-lg px-2 py-1.5 transition-colors hover:bg-wechat-hover dark:hover:bg-white/5"
               >
-                {/* eslint-disable-next-line @next/next/no-img-element */}
+                { }
                 <img
                   src={getImageUrl(item.cover)}
                   alt={item.title}

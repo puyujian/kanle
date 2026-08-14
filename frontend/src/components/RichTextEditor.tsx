@@ -103,6 +103,25 @@ export default function RichTextEditor({
     sel.addRange(range);
   }, []);
 
+  const emitChange = useCallback(() => {
+    if (!editorRef.current) return;
+    onChange(editorRef.current.innerHTML);
+  }, [onChange]);
+
+  const refreshActive = useCallback(() => {
+    if (typeof document === "undefined") return;
+    const next: Record<string, boolean> = {};
+    try {
+      next.bold = document.queryCommandState("bold");
+      next.italic = document.queryCommandState("italic");
+      next.underline = document.queryCommandState("underline");
+      next.strikeThrough = document.queryCommandState("strikeThrough");
+    } catch {
+      // ignore
+    }
+    setActive(next);
+  }, []);
+
   const exec = useCallback((cmd: string, val?: string) => {
     editorRef.current?.focus();
     restoreSelection();
@@ -113,7 +132,7 @@ export default function RichTextEditor({
     }
     refreshActive();
     emitChange();
-  }, [restoreSelection]);
+  }, [emitChange, refreshActive, restoreSelection]);
 
   const submitLinkCard = useCallback(() => {
     const url = linkUrl.trim();
@@ -150,7 +169,7 @@ export default function RichTextEditor({
     emitChange();
     setShowLink(false);
     setLinkUrl("");
-  }, [linkUrl, restoreSelection]);
+  }, [emitChange, linkUrl, refreshActive, restoreSelection]);
 
   const clearFormat = useCallback(() => {
     editorRef.current?.focus();
@@ -161,26 +180,7 @@ export default function RichTextEditor({
     } catch {}
     refreshActive();
     emitChange();
-  }, [restoreSelection]);
-
-  const emitChange = useCallback(() => {
-    if (!editorRef.current) return;
-    onChange(editorRef.current.innerHTML);
-  }, [onChange]);
-
-  const refreshActive = useCallback(() => {
-    if (typeof document === "undefined") return;
-    const next: Record<string, boolean> = {};
-    try {
-      next.bold = document.queryCommandState("bold");
-      next.italic = document.queryCommandState("italic");
-      next.underline = document.queryCommandState("underline");
-      next.strikeThrough = document.queryCommandState("strikeThrough");
-    } catch {
-      // ignore
-    }
-    setActive(next);
-  }, []);
+  }, [emitChange, refreshActive, restoreSelection]);
 
   const handleInput = useCallback(() => {
     refreshActive();

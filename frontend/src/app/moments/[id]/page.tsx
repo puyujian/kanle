@@ -9,7 +9,7 @@ import DesktopFooter from "@/components/DesktopFooter";
 import EditPostModal from "@/components/EditPostModal";
 import PostDetail from "@/components/post-detail/PostDetail";
 import ProfileFadeIn from "@/components/profile/ProfileFadeIn";
-import { owner as fallbackOwner, User, Post } from "@/lib/mock-data";
+import { Post } from "@/lib/mock-data";
 import { getApiUrl } from "@/lib/api-fetch";
 
 const API_URL = getApiUrl();
@@ -25,16 +25,6 @@ async function getPost(id: string): Promise<Post | null> {
     return res.json();
   } catch {
     return null;
-  }
-}
-
-async function getOwner(): Promise<User> {
-  try {
-    const res = await fetch(`${API_URL}/users/owner`, { next: { revalidate: 10 } });
-    if (!res.ok) return fallbackOwner;
-    return await res.json();
-  } catch {
-    return fallbackOwner;
   }
 }
 
@@ -88,7 +78,7 @@ export default async function PostDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const [post, owner] = await Promise.all([getPost(id), getOwner()]);
+  const post = await getPost(id);
   if (!post) notFound();
 
   return (
@@ -115,7 +105,7 @@ export default async function PostDetailPage({
         </div>
 
         {/* 桌面端右侧边栏 — 与首页/archives 一致，固定显示 */}
-        <Sidebar owner={owner} />
+        <Sidebar />
       </div>
 
       <FloatingActions />

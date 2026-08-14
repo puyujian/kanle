@@ -158,7 +158,7 @@ interface PinnedTileProps {
 }
 
 function PinnedTile({ tile, onOpenImage, onOpenVideo }: PinnedTileProps) {
-  const { kind, cover, fallbackText, post } = tile;
+  const { kind, cover, fallbackText } = tile;
 
   const handleClick = (e: React.MouseEvent<HTMLElement>) => {
     if (kind === "video") {

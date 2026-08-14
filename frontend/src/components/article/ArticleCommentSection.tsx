@@ -104,7 +104,7 @@ export default function ArticleCommentSection({
     if (target.replyTo || target.replyToId) {
       const rootId = findRootCommentId(target, comments);
       if (rootId) {
-        // eslint-disable-next-line react-hooks/set-state-in-effect
+
         setExpandedThreads((prev) => new Set(prev).add(rootId));
       }
     }
@@ -125,7 +125,7 @@ export default function ArticleCommentSection({
 
   useEffect(() => {
     const user = getCurrentUser();
-    // eslint-disable-next-line react-hooks/set-state-in-effect
+
     setCurrentUser(user);
     if (user && !user.isLoggedIn) {
       setFormNickname(user.nickname);
@@ -994,7 +994,7 @@ export default function ArticleCommentSection({
 
             return (
               <div key={parent.id} id={`comment-${parent.id}`} className="flex gap-3 scroll-mt-20">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
+                { }
                 <img
                   src={cravatarUrl(parent.email || parent.author, 80)}
                   alt={parent.author}
@@ -1090,7 +1090,7 @@ export default function ArticleCommentSection({
                             : reply.replyTo !== parent.author;
                           return (
                             <div key={reply.id} id={`comment-${reply.id}`} className="flex gap-2 scroll-mt-20">
-                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                              { }
                               <img
                                 src={cravatarUrl(reply.email || reply.author, 80)}
                                 alt={reply.author}

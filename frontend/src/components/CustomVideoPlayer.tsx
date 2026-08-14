@@ -22,6 +22,22 @@ interface CustomVideoPlayerProps {
   className?: string;
 }
 
+type WebkitVideoElement = HTMLVideoElement & {
+  webkitEnterFullscreen?: () => void;
+};
+
+type LegacyFullscreenElement = HTMLDivElement & {
+  webkitRequestFullscreen?: () => void;
+  mozRequestFullScreen?: () => void;
+  msRequestFullscreen?: () => void;
+};
+
+type LegacyFullscreenDocument = Document & {
+  webkitExitFullscreen?: () => void;
+  mozCancelFullScreen?: () => void;
+  msExitFullscreen?: () => void;
+};
+
 function formatTime(seconds: number): string {
   if (!Number.isFinite(seconds) || seconds < 0) return "00:00";
   const total = Math.floor(seconds);
@@ -129,19 +145,21 @@ export default function CustomVideoPlayer({
     const v = videoRef.current;
     if (!el) return;
     // iOS Safari：video 元素原生全屏（系统接管控件）
-    if (v && "webkitEnterFullscreen" in v && typeof (v as any).webkitEnterFullscreen === "function") {
+    const webkitVideo = v as WebkitVideoElement | null;
+    if (webkitVideo?.webkitEnterFullscreen) {
       try {
-        (v as any).webkitEnterFullscreen();
+        webkitVideo.webkitEnterFullscreen();
         return;
       } catch {
         // 回退到容器全屏
       }
     }
     try {
+      const legacyElement = el as LegacyFullscreenElement;
       if (el.requestFullscreen) await el.requestFullscreen();
-      else if ((el as any).webkitRequestFullscreen) (el as any).webkitRequestFullscreen();
-      else if ((el as any).mozRequestFullScreen) (el as any).mozRequestFullScreen();
-      else if ((el as any).msRequestFullscreen) (el as any).msRequestFullscreen();
+      else if (legacyElement.webkitRequestFullscreen) legacyElement.webkitRequestFullscreen();
+      else if (legacyElement.mozRequestFullScreen) legacyElement.mozRequestFullScreen();
+      else if (legacyElement.msRequestFullscreen) legacyElement.msRequestFullscreen();
     } catch {
       // 全屏失败：忽略
     }
@@ -149,10 +167,11 @@ export default function CustomVideoPlayer({
 
   const exitFullscreen = useCallback(async () => {
     try {
+      const legacyDocument = document as LegacyFullscreenDocument;
       if (document.exitFullscreen) await document.exitFullscreen();
-      else if ((document as any).webkitExitFullscreen) (document as any).webkitExitFullscreen();
-      else if ((document as any).mozCancelFullScreen) (document as any).mozCancelFullScreen();
-      else if ((document as any).msExitFullscreen) (document as any).msExitFullscreen();
+      else if (legacyDocument.webkitExitFullscreen) legacyDocument.webkitExitFullscreen();
+      else if (legacyDocument.mozCancelFullScreen) legacyDocument.mozCancelFullScreen();
+      else if (legacyDocument.msExitFullscreen) legacyDocument.msExitFullscreen();
     } catch {
       // 忽略
     }

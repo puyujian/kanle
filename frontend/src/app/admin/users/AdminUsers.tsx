@@ -37,6 +37,10 @@ interface User {
   website: string;
 }
 
+interface PublicSettings {
+  backgroundImages?: string | string[];
+}
+
 function ImageField({
   label,
   url,
@@ -410,7 +414,7 @@ export default function AdminUsers() {
       apiFetch("/admin/users").then((res) => res.json()),
       fetch(`${process.env.NEXT_PUBLIC_API_URL || "/api"}/settings`, { cache: "no-store" }).then((res) => res.json()),
     ])
-      .then(([data, settings]: [User[], any]) => {
+      .then(([data, settings]: [User[], PublicSettings]) => {
         if (Array.isArray(data)) {
           const admin = data[0];
           if (admin) {

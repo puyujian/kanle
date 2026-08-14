@@ -150,7 +150,7 @@ export default function ArticleListSidebar() {
                       >
                         {(article.cover || defaultCover) && (
                           <div className="relative h-12 w-16 shrink-0 overflow-hidden rounded-md bg-wechat-bubble dark:bg-white/5">
-                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            { }
                             <img
                               src={getImageUrl(article.cover || defaultCover)}
                               alt=""

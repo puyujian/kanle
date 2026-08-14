@@ -114,7 +114,7 @@ export default function VideoEmbedNodeView({
           style={{ aspectRatio: "16 / 9" }}
         >
           {cover ? (
-            // eslint-disable-next-line @next/next/no-img-element
+
             <img src={cover} alt={video.title || "视频封面"} className="w-full h-full object-cover pointer-events-none" />
           ) : (
             <div className="flex items-center justify-center bg-black/80 h-full">
@@ -155,7 +155,7 @@ export default function VideoEmbedNodeView({
     return (
       <div className="w-full max-w-[360px]">
         <div className="overflow-hidden rounded-lg bg-black" style={{ aspectRatio: "16 / 9" }}>
-          {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
+          { }
           <video
             src={url}
             poster={cover}

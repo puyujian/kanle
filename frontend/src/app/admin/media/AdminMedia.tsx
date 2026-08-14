@@ -122,8 +122,6 @@ export default function AdminMedia() {
     const API_URL = getApiUrl();
     const token = getToken();
     let successCount = 0;
-    let failCount = 0;
-
     for (const file of Array.from(files)) {
       try {
         const form = new FormData();
@@ -134,10 +132,7 @@ export default function AdminMedia() {
           body: form,
         });
         if (res.ok) successCount++;
-        else failCount++;
-      } catch {
-        failCount++;
-      }
+      } catch {}
     }
 
     setUploading(false);
@@ -171,8 +166,8 @@ export default function AdminMedia() {
       } else {
         setImportMsg(data.message || "导入失败");
       }
-    } catch (err: any) {
-      setImportMsg(err.message || "导入失败");
+    } catch (err: unknown) {
+      setImportMsg(err instanceof Error ? err.message : "导入失败");
     } finally {
       setImporting(false);
       // 5 秒后清空提示

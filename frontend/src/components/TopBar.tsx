@@ -2,9 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { createPortal } from "react-dom";
-import { useRouter } from "next/navigation";
 import {
-  User,
   UserRound,
   Contact,
   Play,
@@ -16,7 +14,6 @@ import {
   Volume2,
   VolumeX,
   Camera,
-  Lock,
   Eye,
   EyeOff,
   ImagePlus,
@@ -42,10 +39,10 @@ import {
 import { cravatarUrl } from "@/lib/avatar";
 import { getGlobalAudio } from "@/lib/global-audio";
 import { useMusicPlayer } from "@/lib/music-player-store";
-import { Post, MUSIC_PLUGIN_LABELS, type PostLocation, type PostImage, type PostVideo, type PostDouban } from "@/lib/mock-data";
+import { Post, MUSIC_PLUGIN_LABELS, type MusicSearchItem, type PostLocation, type PostImage, type PostVideo, type PostDouban } from "@/lib/mock-data";
 import { isLivePhoto, getImageSrc } from "@/lib/post-image";
 import { uploadImage, toHttps } from "@/lib/upload";
-import { getImageUrl, useSiteSettings } from "@/lib/site-settings-store";
+import { getImageUrl } from "@/lib/site-settings-store";
 import { useExitAnimation } from "@/lib/use-exit-animation";
 import RichTextEditor from "./RichTextEditor";
 import LazyImage from "./LazyImage";
@@ -60,15 +57,8 @@ import AiResultDialog from "./ai/AiResultDialog";
 import { plainTextToParagraphHtml, protectRichHtml, restoreProtectedHtml, streamAiGeneration } from "@/lib/ai-client";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000/api";
-const AUDIO_BASE = API_URL.replace("/api", "");
-
 /** 插件 platform 名 → 对应的真实音乐平台名（复用 mock-data 统一口径） */
 const PLATFORM_MAP = MUSIC_PLUGIN_LABELS;
-
-function toAbsolute(url: string): string {
-  if (!url || typeof url !== "string") return "";
-  return url.startsWith("http") ? url : `${AUDIO_BASE}${url}`;
-}
 
 interface TopBarProps {
   coverHeight?: number;
@@ -131,8 +121,7 @@ export interface LoggedInUser {
 }
 
 export default function TopBar({ coverHeight = 300 }: TopBarProps) {
-  const router = useRouter();
-  const [scrollProgress, setScrollProgress] = useState(0);
+  const [, setScrollProgress] = useState(0);
   const [bgAlpha, setBgAlpha] = useState(0);
   const [showFriends, setShowFriends] = useState(false);
   const [friendsTab, setFriendsTab] = useState<"friends" | "douban" | "rss">("friends");
@@ -154,7 +143,6 @@ export default function TopBar({ coverHeight = 300 }: TopBarProps) {
 
   // Music player — 从全局 store 读取状态（由 GlobalMusicManager 管理）
   const isPlaying = useMusicPlayer((s) => s.isPlaying);
-  const isLoading = useMusicPlayer((s) => s.isLoading);
   const switching = useMusicPlayer((s) => s.switching);
   const musicUrl = useMusicPlayer((s) => s.musicUrl);
   const musicName = useMusicPlayer((s) => s.musicName);
@@ -1003,9 +991,6 @@ export function LoginModal({
     }
   };
 
-  const faviconUrl = useSiteSettings((s) => s.faviconUrl);
-  const siteName = useSiteSettings((s) => s.siteName);
-  const resolvedIcon = faviconUrl ? getImageUrl(faviconUrl) : "";
   const canSubmit = account.trim().length > 0 && password.trim().length > 0;
 
   if (typeof document === "undefined") return null;
@@ -1142,7 +1127,7 @@ export function PublishModal({
     musicId?: string;
     songmid?: string;
     /** 插件特定字段（songmid/hash/bvid ...），透传给后端 stream/lyric */
-    extra?: Record<string, any>;
+    extra?: Record<string, unknown>;
     /** LRC 歌词文本（上传歌曲） */
     lrc?: string;
   } | null>(editPost?.music ?? null);
@@ -1175,7 +1160,7 @@ export function PublishModal({
   const [musicPlugins, setMusicPlugins] = useState<{ platform: string; name: string; primaryKey?: string[] }[]>([]);
   const [selectedPlatform, setSelectedPlatform] = useState("");
   const [searchKeyword, setSearchKeyword] = useState("");
-  const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [searchResults, setSearchResults] = useState<MusicSearchItem[]>([]);
   const [searching, setSearching] = useState(false);
   const [loadingMusic, setLoadingMusic] = useState(false);
   const [uploadingAudio, setUploadingAudio] = useState(false);
@@ -1490,7 +1475,7 @@ export function PublishModal({
 
   // 选中搜索结果：调 preview 获取播放地址，歌曲信息优先用搜索结果
   // 搜索结果返回完整 IMusicItem（含 songmid/hash/bvid 等插件字段），全部透传给后端
-  const handlePickSong = async (item: any) => {
+  const handlePickSong = async (item: MusicSearchItem) => {
     setLoadingMusic(true);
     setError("");
     try {
@@ -1498,7 +1483,7 @@ export function PublishModal({
       const standardFields = new Set([
         "id", "platform", "title", "artist", "album", "artwork", "url", "lrc", "rawLrc", "duration",
       ]);
-      const extra: Record<string, any> = {};
+      const extra: Record<string, unknown> = {};
       for (const [k, v] of Object.entries(item)) {
         if (!standardFields.has(k) && v != null && v !== "") {
           extra[k] = v;
@@ -1585,8 +1570,8 @@ export function PublishModal({
     try {
       const url = await uploadImage(file, token);
       setCustomMusicCover(url);
-    } catch (e: any) {
-      setError(e.message || "封面上传失败");
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "封面上传失败");
     } finally {
       setUploadingCover(false);
     }
@@ -1988,7 +1973,7 @@ export function PublishModal({
                               : "cursor-pointer hover:opacity-80 active:scale-95"
                           }`}
                         >
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          { }
                           <img
                             src={fullUrl}
                             alt=""

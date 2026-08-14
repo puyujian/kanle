@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { LocateFixed, Search } from "lucide-react";
+import { LocateFixed } from "lucide-react";
 import { apiFetch } from "@/lib/api-fetch";
 import type { PostLocation } from "@/lib/mock-data";
 import { wgs84ToGcj02 } from "@/lib/coord-transform";
@@ -13,16 +13,60 @@ interface LocationPickerProps {
   initial?: PostLocation | null;
 }
 
+interface AMapLngLat {
+  lng: number;
+  lat: number;
+}
+
+interface AMapMap {
+  add: (marker: AMapMarker) => void;
+  destroy: () => void;
+  getCenter: () => AMapLngLat;
+  on: (event: string, callback: () => void) => void;
+  setZoomAndCenter: (zoom: number, center: [number, number]) => void;
+}
+
+interface AMapMarker {
+  setPosition: (position: [number, number]) => void;
+}
+
+interface AMapGeolocationResult {
+  position?: AMapLngLat;
+  accuracy?: number;
+  location_type?: string;
+}
+
+interface AMapGeolocation {
+  getCurrentPosition: (
+    callback: (status: string, result: AMapGeolocationResult) => void
+  ) => void;
+}
+
+interface AMapApi {
+  Map: new (
+    container: HTMLDivElement | null,
+    options: Record<string, unknown>
+  ) => AMapMap;
+  Marker: new (options: Record<string, unknown>) => AMapMarker;
+  Geolocation?: new (options: Record<string, unknown>) => AMapGeolocation;
+}
+
+type AMapWindow = Window & {
+  AMap?: AMapApi;
+  _AMapSecurityConfig?: { securityJsCode: string };
+};
+
 // 全局 amap 加载状态：避免重复加载
 let amapLoaderPromise: Promise<void> | null = null;
 
 async function loadAmap(key: string, securityCode: string): Promise<void> {
-  if ((window as any).AMap) return;
+  const amapWindow = window as AMapWindow;
+  if (amapWindow.AMap) return;
   if (amapLoaderPromise) return amapLoaderPromise;
 
   amapLoaderPromise = new Promise<void>((resolve, reject) => {
     if (securityCode) {
-      (window as any)._AMapSecurityConfig = { securityJsCode: securityCode };
+      amapWindow._AMapSecurityConfig = { securityJsCode: securityCode };
     }
     const script = document.createElement("script");
     script.src = `https://webapi.amap.com/maps?v=2.0&key=${encodeURIComponent(
@@ -30,7 +74,7 @@ async function loadAmap(key: string, securityCode: string): Promise<void> {
     )}&plugin=AMap.Geocoder,AMap.Geolocation`;
     script.async = true;
     script.onload = () => {
-      const AMap = (window as any).AMap;
+      const AMap = amapWindow.AMap;
       if (!AMap || typeof AMap.Map !== "function") {
         amapLoaderPromise = null;
         reject(
@@ -59,9 +103,8 @@ export default function LocationPicker({
 }: LocationPickerProps) {
   const { closing, handleClose } = useExitAnimation(onClose, 200);
   const mapContainerRef = useRef<HTMLDivElement>(null);
-  const mapRef = useRef<any>(null);
-  const markerRef = useRef<any>(null);
-  const geocoderRef = useRef<any>(null);
+  const mapRef = useRef<AMapMap | null>(null);
+  const markerRef = useRef<AMapMarker | null>(null);
   const reverseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // 用户是否手动编辑过 customName（编辑过则移动地图时不再覆盖）
   const userEditedRef = useRef(false);
@@ -110,7 +153,8 @@ export default function LocationPicker({
         await loadAmap(amapJsKey, amapSecurityJsCode);
         if (cancelled) return;
 
-        const AMap = (window as any).AMap;
+        const AMap = (window as AMapWindow).AMap;
+        if (!AMap) throw new Error("高德地图尚未加载完成");
         const center: [number, number] =
           initial?.lng && initial?.lat
             ? [initial.lng, initial.lat]
@@ -129,8 +173,6 @@ export default function LocationPicker({
         });
         map.add(marker);
         markerRef.current = marker;
-
-        geocoderRef.current = new AMap.Geocoder({ extensions: "all" });
 
         // 初始化时立即设置 currentLatLng，确保"完成"按钮可用
         setCurrentLatLng({ lng: center[0], lat: center[1] });
@@ -151,9 +193,9 @@ export default function LocationPicker({
         if (!initial?.lng || !initial?.lat) {
           tryLocate();
         }
-      } catch (e: any) {
+      } catch (e: unknown) {
         if (cancelled) return;
-        setMapError(e.message || "地图加载失败");
+        setMapError(e instanceof Error ? e.message : "地图加载失败");
         setLoadingMap(false);
       }
     })();
@@ -210,8 +252,8 @@ export default function LocationPicker({
           setCustomName(data.formattedAddress);
         }
       }
-    } catch (e: any) {
-      setRegeoError(e.message || "获取附近地点失败");
+    } catch (e: unknown) {
+      setRegeoError(e instanceof Error ? e.message : "获取附近地点失败");
       setNearbyPois([]);
       // regeo 失败时，给 customName 一个默认值，确保"完成"按钮可用
       if (!userEditedRef.current) {
@@ -229,7 +271,7 @@ export default function LocationPicker({
   // 4. IP 定位 — 兜底，城市级精度（所有 GPS 失败后使用）
   // 并行执行避免串行等待，任何一种返回立即应用，更好的结果自动更新
   const tryLocate = () => {
-    const AMap = (window as any).AMap;
+    const AMap = (window as AMapWindow).AMap;
 
     interface LocateResult {
       lng: number;
@@ -307,7 +349,7 @@ export default function LocationPicker({
           showMarker: false,
           noIpLocate: 1,
         });
-        geolocation.getCurrentPosition((status: string, result: any) => {
+        geolocation.getCurrentPosition((status, result) => {
           if (status === "complete" && result?.position) {
             resolve({
               lng: result.position.lng,

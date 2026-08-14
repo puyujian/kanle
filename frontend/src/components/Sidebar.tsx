@@ -3,8 +3,7 @@
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { BookUser, Camera, ExternalLink, Eye, EyeOff, LayoutDashboard, Link2, Lock, LogOut, MoreVertical, Rss, UserRound } from "lucide-react";
-import { User as UserType } from "@/lib/mock-data";
+import { BookUser, Camera, ExternalLink, Eye, EyeOff, LayoutDashboard, Lock, LogOut, MoreVertical, Rss, UserRound } from "lucide-react";
 import { cravatarUrl } from "@/lib/avatar";
 import { getImageUrl } from "@/lib/site-settings-store";
 import { PublishModal, type LoggedInUser } from "@/components/TopBar";
@@ -64,11 +63,7 @@ interface SiteSettings {
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000/api";
 
-interface SidebarProps {
-  owner: UserType;
-}
-
-export default function Sidebar({ owner }: SidebarProps) {
+export default function Sidebar() {
   const [friendLinks, setFriendLinks] = useState<FriendLink[]>([]);
   const [friendsLoaded, setFriendsLoaded] = useState(false);
   const [friendsPage, setFriendsPage] = useState(1);

@@ -36,7 +36,7 @@ export default function DoubanEmbedNodeView({
       >
         {cover ? (
           <span className="link-card-image">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
+            { }
             <img src={cover} alt="" referrerPolicy="no-referrer" />
           </span>
         ) : (

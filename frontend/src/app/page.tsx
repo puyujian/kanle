@@ -16,6 +16,10 @@ import { getApiUrl } from "@/lib/api-fetch";
 const API_URL = getApiUrl();
 const PAGE_SIZE = 10;
 
+interface CoverSettings {
+  backgroundImages?: string | string[];
+}
+
 // ISR：10 秒重新验证（后端写操作后会触发按需重验证，10秒仅作安全网）
 export const revalidate = 10;
 
@@ -51,7 +55,7 @@ async function getSettings() {
 }
 
 /** 从网站设置中解析背景图轮播列表；为空则回退到用户封面 */
-function getCoverList(settings: any, fallback: string): string[] {
+function getCoverList(settings: CoverSettings | null, fallback: string): string[] {
   const raw = settings?.backgroundImages;
   if (!raw) return [fallback];
   try {
@@ -97,7 +101,7 @@ export default async function Home() {
 
         {/* Desktop right sidebar — fixed to the right of main so it stays
             in view as the body scrolls natively. */}
-        <Sidebar owner={owner} />
+        <Sidebar />
 
         {/* Desktop left sidebar — article list with covers */}
         <ArticleListSidebar />

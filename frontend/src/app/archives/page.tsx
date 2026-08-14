@@ -16,6 +16,10 @@ import { getApiUrl } from "@/lib/api-fetch";
 const API_URL = getApiUrl();
 const PAGE_SIZE = 10;
 
+interface CoverSettings {
+  backgroundImages?: string | string[];
+}
+
 export const revalidate = 10;
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -66,7 +70,7 @@ async function getSettings() {
   }
 }
 
-function getCoverList(settings: any, fallback: string): string[] {
+function getCoverList(settings: CoverSettings | null, fallback: string): string[] {
   const raw = settings?.backgroundImages;
   if (!raw) return [fallback];
   try {
@@ -113,7 +117,7 @@ export default async function ProfilePage() {
           </main>
         </div>
 
-        <Sidebar owner={owner} />
+        <Sidebar />
       </div>
 
       <FloatingActions />

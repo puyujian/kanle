@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useCallback, useMemo } from "react";
+import { useState, useCallback } from "react";
 import { NodeViewWrapper, NodeViewContent, type NodeViewProps } from "@tiptap/react";
 import { Check, Copy } from "lucide-react";
 
@@ -39,7 +39,6 @@ const LANG_LABELS: Record<string, string> = {
 export default function CodeBlockNodeView({
   node,
   updateAttributes,
-  deleteNode,
   selected,
 }: NodeViewProps) {
   const [copied, setCopied] = useState(false);

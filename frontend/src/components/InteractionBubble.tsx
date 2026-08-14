@@ -159,7 +159,7 @@ export default function InteractionBubble({
           <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1.5">
             <Heart className="h-4 w-4 shrink-0 text-wechat-nickname" />
             {displayLikes.map((like, i) => (
-              // eslint-disable-next-line @next/next/no-img-element
+
               <img
                 key={`${like.name}-${i}`}
                 src={likeAvatarUrl(like, 48, nameToEmail)}
@@ -186,7 +186,7 @@ export default function InteractionBubble({
             {displayedComments.map((comment) => {
               return (
                 <li key={comment.id} id={`comment-${comment.id}`} className="break-all scroll-mt-20 flex items-start gap-2">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  { }
                   <img
                     src={commentAvatarUrl(comment, 64)}
                     alt={comment.author}

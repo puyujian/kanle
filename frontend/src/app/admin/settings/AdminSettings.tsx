@@ -749,7 +749,7 @@ export default function AdminSettings() {
             placeholder="150"
           />
           <p className="mt-1.5 text-xs text-adm-text-tertiary">
-            动态文字超过此字数时自动折叠，显示"展开"按钮；设为 0 则不折叠
+            动态文字超过此字数时自动折叠，显示“展开”按钮；设为 0 则不折叠
           </p>
         </div>
 

@@ -30,6 +30,20 @@ export interface CommandItem extends SlashCommandItem {
   action: (editor: Editor) => void;
 }
 
+interface SlashCommandStorage {
+  openImagePicker?: () => void;
+  openLinkPanel?: () => void;
+  openLinkCardPanel?: () => void;
+  openMusicPanel?: () => void;
+  openVideoPanel?: () => void;
+  openDoubanPicker?: () => void;
+  openArticlePicker?: () => void;
+}
+
+function slashCommandStorage(editor: Editor): SlashCommandStorage | undefined {
+  return (editor.storage as unknown as { slashCommand?: SlashCommandStorage }).slashCommand;
+}
+
 export const COMMANDS: CommandItem[] = [
   {
     title: "正文",
@@ -100,7 +114,7 @@ export const COMMANDS: CommandItem[] = [
     description: "上传图片",
     keywords: "image picture photo upload",
     action: (editor) => {
-      const storage = (editor.storage as Record<string, any>).slashCommand;
+      const storage = slashCommandStorage(editor);
       storage?.openImagePicker?.();
     },
   },
@@ -122,7 +136,7 @@ export const COMMANDS: CommandItem[] = [
     description: "插入超链接",
     keywords: "link url href",
     action: (editor) => {
-      const storage = (editor.storage as Record<string, any>).slashCommand;
+      const storage = slashCommandStorage(editor);
       storage?.openLinkPanel?.();
     },
   },
@@ -132,7 +146,7 @@ export const COMMANDS: CommandItem[] = [
     description: "带预览的链接卡片",
     keywords: "link card url preview",
     action: (editor) => {
-      const storage = (editor.storage as Record<string, any>).slashCommand;
+      const storage = slashCommandStorage(editor);
       storage?.openLinkCardPanel?.();
     },
   },
@@ -142,7 +156,7 @@ export const COMMANDS: CommandItem[] = [
     description: "插入音乐卡片",
     keywords: "music audio song player",
     action: (editor) => {
-      const storage = (editor.storage as Record<string, any>).slashCommand;
+      const storage = slashCommandStorage(editor);
       storage?.openMusicPanel?.();
     },
   },
@@ -152,7 +166,7 @@ export const COMMANDS: CommandItem[] = [
     description: "插入视频卡片",
     keywords: "video movie player",
     action: (editor) => {
-      const storage = (editor.storage as Record<string, any>).slashCommand;
+      const storage = slashCommandStorage(editor);
       storage?.openVideoPanel?.();
     },
   },
@@ -162,7 +176,7 @@ export const COMMANDS: CommandItem[] = [
     description: "插入豆瓣影单卡片",
     keywords: "douban movie book music film",
     action: (editor) => {
-      const storage = (editor.storage as Record<string, any>).slashCommand;
+      const storage = slashCommandStorage(editor);
       storage?.openDoubanPicker?.();
     },
   },
@@ -172,7 +186,7 @@ export const COMMANDS: CommandItem[] = [
     description: "引用站内文章",
     keywords: "article post reference card",
     action: (editor) => {
-      const storage = (editor.storage as Record<string, any>).slashCommand;
+      const storage = slashCommandStorage(editor);
       storage?.openArticlePicker?.();
     },
   },

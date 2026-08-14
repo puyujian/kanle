@@ -32,6 +32,19 @@ function useIsDark() {
   return dark;
 }
 
+/** 小屏图表需要更紧凑的图例和坐标轴留白 */
+function useIsMobile() {
+  const [mobile, setMobile] = useState(false);
+  useEffect(() => {
+    const media = window.matchMedia("(max-width: 639px)");
+    const update = () => setMobile(media.matches);
+    update();
+    media.addEventListener("change", update);
+    return () => media.removeEventListener("change", update);
+  }, []);
+  return mobile;
+}
+
 /* ============ 51.la 返回数据容错解析 ============ */
 
 interface TrendItem {
@@ -103,28 +116,29 @@ function itemValue(it: ListItem): number {
   return Number(it.count ?? it.value ?? it.pv ?? 0) || 0;
 }
 
+const TREND_SERIES = [
+  { name: "浏览量(PV)", key: "pv", color: "#3b82f6" },
+  { name: "访客数(UV)", key: "uv", color: "#8b5cf6" },
+  { name: "IP数", key: "ip", color: "#10b981" },
+  { name: "新访客数", key: "newUserCount", altKey: "newVisitor", color: "#f59e0b" },
+  { name: "会话数", key: "sv", color: "#f43f5e" },
+] as const;
+
 /* ============ 图表组件 ============ */
 
 /** 趋势折线图：PV / UV / IP / 新访客 / 会话数 */
 function TrendLineChart({ data }: { data: TrendItem[] }) {
   const isDark = useIsDark();
+  const isMobile = useIsMobile();
   const textColor = isDark ? "rgba(255,255,255,0.65)" : "rgba(0,0,0,0.65)";
   const axisLineColor = isDark ? "rgba(255,255,255,0.15)" : "rgba(0,0,0,0.15)";
 
-  const labels = data.map((d) => {
+  const labels = useMemo(() => data.map((d) => {
     const t = d.time || d.date || "";
     // 简化为 MM-DD 格式
     const m = t.match(/(\d{4})-(\d{2})-(\d{2})/);
     return m ? `${m[2]}-${m[3]}` : t;
-  });
-
-  const series = [
-    { name: "浏览量(PV)", key: "pv", color: "#3b82f6" },
-    { name: "访客数(UV)", key: "uv", color: "#8b5cf6" },
-    { name: "IP数", key: "ip", color: "#10b981" },
-    { name: "新访客数", key: "newUserCount", altKey: "newVisitor", color: "#f59e0b" },
-    { name: "会话数", key: "sv", color: "#f43f5e" },
-  ];
+  }), [data]);
 
   const option = useMemo(() => ({
     tooltip: {
@@ -134,22 +148,24 @@ function TrendLineChart({ data }: { data: TrendItem[] }) {
       textStyle: { color: textColor, fontSize: 12 },
     },
     legend: {
-      data: series.map((s) => s.name),
+      data: TREND_SERIES.map((s) => s.name),
+      type: "scroll",
       top: 0,
+      left: isMobile ? 0 : "auto",
       right: 0,
       icon: "circle",
       itemWidth: 8,
       itemHeight: 8,
       textStyle: { color: textColor, fontSize: 11 },
     },
-    grid: { left: "2%", right: "2%", bottom: "2%", top: 36, containLabel: true },
+    grid: { left: isMobile ? 0 : "2%", right: isMobile ? 2 : "2%", bottom: "2%", top: 36, containLabel: true },
     xAxis: {
       type: "category",
       boundaryGap: false,
       data: labels,
       axisLine: { lineStyle: { color: axisLineColor } },
       axisTick: { show: false },
-      axisLabel: { color: textColor, fontSize: 10 },
+      axisLabel: { color: textColor, fontSize: isMobile ? 9 : 10, hideOverlap: true },
     },
     yAxis: {
       type: "value",
@@ -157,29 +173,29 @@ function TrendLineChart({ data }: { data: TrendItem[] }) {
       axisLine: { show: false },
       axisTick: { show: false },
       splitLine: { lineStyle: { color: axisLineColor, type: "dashed" } },
-      axisLabel: { color: textColor, fontSize: 10 },
+      axisLabel: { color: textColor, fontSize: isMobile ? 9 : 10 },
     },
-    series: series.map((s) => {
+    series: TREND_SERIES.map((s) => {
       const key = s.key as keyof TrendItem;
-      const altKey = s.altKey as keyof TrendItem;
+      const altKey = "altKey" in s ? s.altKey as keyof TrendItem : undefined;
       return {
         name: s.name,
         type: "line",
         smooth: true,
         symbol: "circle",
         symbolSize: 6,
-        data: data.map((d) => Number(d[key] ?? d[altKey] ?? 0) || 0),
+        data: data.map((d) => Number(d[key] ?? (altKey ? d[altKey] : 0) ?? 0) || 0),
         itemStyle: { color: s.color },
         lineStyle: { color: s.color, width: 2 },
         areaStyle: { color: s.color, opacity: 0.08 },
       };
     }),
-  }), [data, isDark, textColor, axisLineColor]);
+  }), [data, labels, isDark, isMobile, textColor, axisLineColor]);
 
   return (
     <ReactECharts
       option={option}
-      style={{ height: 280, width: "100%" }}
+      style={{ height: isMobile ? 230 : 280, width: "100%" }}
       opts={{ renderer: "svg" }}
       notMerge
     />
@@ -189,6 +205,7 @@ function TrendLineChart({ data }: { data: TrendItem[] }) {
 /** 横向柱状图：来路网站 / 受访页 / 入口页 Top N */
 function HorizontalBarChart({ items, color = "#3b82f6" }: { items: ListItem[]; color?: string }) {
   const isDark = useIsDark();
+  const isMobile = useIsMobile();
   const textColor = isDark ? "rgba(255,255,255,0.65)" : "rgba(0,0,0,0.65)";
   const axisLineColor = isDark ? "rgba(255,255,255,0.15)" : "rgba(0,0,0,0.15)";
 
@@ -202,7 +219,7 @@ function HorizontalBarChart({ items, color = "#3b82f6" }: { items: ListItem[]; c
       borderColor: axisLineColor,
       textStyle: { color: textColor, fontSize: 12 },
     },
-    grid: { left: "2%", right: "8%", bottom: "2%", top: "2%", containLabel: true },
+    grid: { left: isMobile ? 0 : "2%", right: isMobile ? "10%" : "8%", bottom: "2%", top: "2%", containLabel: true },
     xAxis: {
       type: "value",
       minInterval: 1,
@@ -219,7 +236,7 @@ function HorizontalBarChart({ items, color = "#3b82f6" }: { items: ListItem[]; c
       }),
       axisLine: { lineStyle: { color: axisLineColor } },
       axisTick: { show: false },
-      axisLabel: { color: textColor, fontSize: 10, width: 160, overflow: "truncate" },
+      axisLabel: { color: textColor, fontSize: isMobile ? 9 : 10, width: isMobile ? 88 : 160, overflow: "truncate" },
     },
     series: [{
       type: "bar",
@@ -228,7 +245,7 @@ function HorizontalBarChart({ items, color = "#3b82f6" }: { items: ListItem[]; c
       barMaxWidth: 18,
       label: { show: true, position: "right", color: textColor, fontSize: 10 },
     }],
-  }), [top, isDark, textColor, axisLineColor, color]);
+  }), [top, isDark, isMobile, textColor, axisLineColor, color]);
 
   if (top.length === 0) {
     return <p className="py-8 text-center text-xs text-adm-text-tertiary">暂无数据</p>;
@@ -305,39 +322,39 @@ export default function LaAnalyticsSection() {
   ];
 
   return (
-    <div className="mt-4 rounded-2xl border border-adm-border bg-adm-card p-5">
+    <div className="mt-3 min-w-0 rounded-xl border border-adm-border bg-adm-card p-3.5 shadow-sm sm:mt-4 sm:rounded-2xl sm:p-5">
       {/* 标题栏 */}
-      <div className="mb-4 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <BarChart3 className="h-4 w-4 text-adm-primary" />
-          <h3 className="text-sm font-semibold text-adm-text">51.la 网站统计</h3>
+      <div className="mb-3 flex items-start justify-between gap-2 sm:mb-4 sm:items-center">
+        <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-1">
+          <BarChart3 className="h-4 w-4 shrink-0 text-adm-primary" />
+          <h3 className="shrink-0 text-sm font-semibold text-adm-text">51.la 网站统计</h3>
           {data?.range && (
-            <span className="text-xs text-adm-text-tertiary">
+            <span className="basis-full pl-6 text-[11px] text-adm-text-tertiary sm:basis-auto sm:pl-0 sm:text-xs">
               {data.range.startDay} ~ {data.range.endDay}
             </span>
           )}
           {data?.fetchedAt && (
-            <span className="text-[10px] text-adm-text-tertiary/70" title={data.fetchedAt}>
+            <span className="hidden text-[10px] text-adm-text-tertiary/70 md:inline" title={data.fetchedAt}>
               数据拉取于 {new Date(data.fetchedAt).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })}
             </span>
           )}
-          <span className="rounded bg-adm-input/60 px-1.5 py-0.5 text-[10px] text-adm-text-tertiary">
+          <span className="hidden rounded bg-adm-input/60 px-1.5 py-0.5 text-[10px] text-adm-text-tertiary sm:inline">
             每日 0 点更新
           </span>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex shrink-0 items-center gap-1 sm:gap-2">
           <a
             href="https://v6.51.la"
             target="_blank"
             rel="noreferrer"
-            className="flex items-center gap-1 text-xs text-adm-text-tertiary transition-colors hover:text-adm-text-secondary"
+            className="hidden items-center gap-1 text-xs text-adm-text-tertiary transition-colors hover:text-adm-text-secondary sm:flex"
           >
             51.la <ExternalLink className="h-3 w-3" />
           </a>
           <button
             onClick={() => fetchData()}
             disabled={loading}
-            className="flex items-center gap-1 rounded-lg px-2 py-1 text-xs text-adm-text-secondary transition-colors hover:bg-adm-card-hover disabled:opacity-50"
+            className="flex min-h-9 items-center gap-1 rounded-lg px-2.5 py-1 text-xs text-adm-text-secondary transition-colors hover:bg-adm-card-hover disabled:opacity-50"
             title="重新加载（走缓存，不消耗配额）"
           >
             <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
@@ -360,16 +377,16 @@ export default function LaAnalyticsSection() {
       ) : (
         <>
           {/* 今日汇总卡片 */}
-          <div className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
+          <div className="mb-3 grid grid-cols-2 gap-2 sm:mb-4 sm:grid-cols-3 lg:grid-cols-5">
             {summaryCards.map((card) => {
               const Icon = card.icon;
               return (
-                <div key={card.label} className="rounded-xl border border-adm-border bg-adm-input/50 p-3">
+                <div key={card.label} className="rounded-xl border border-adm-border bg-adm-input/50 p-2.5 last:col-span-2 sm:p-3 sm:last:col-span-1">
                   <div className="flex items-center gap-1.5">
                     <Icon className={`h-3.5 w-3.5 ${card.color}`} />
                     <span className="text-xs text-adm-text-secondary">{card.label}</span>
                   </div>
-                  <div className="mt-1.5 text-xl font-bold text-adm-text">{card.value}</div>
+                  <div className="mt-1.5 text-lg font-bold leading-none text-adm-text sm:text-xl">{card.value}</div>
                 </div>
               );
             })}
@@ -377,30 +394,30 @@ export default function LaAnalyticsSection() {
 
           {/* 趋势折线图 */}
           {trendList.length > 0 && (
-            <div className="mb-4">
+            <div className="mb-3 min-w-0 sm:mb-4">
               <h4 className="mb-2 text-xs font-medium text-adm-text-secondary">趋势分析（近7天）</h4>
               <TrendLineChart data={trendList} />
             </div>
           )}
 
           {/* 来路 / 受访页 / 入口页 */}
-          <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-            <div>
+          <div className="grid grid-cols-1 gap-3 sm:gap-4 lg:grid-cols-3">
+            <div className="min-w-0 rounded-xl bg-adm-input/20 p-2 sm:bg-transparent sm:p-0">
               <h4 className="mb-2 text-xs font-medium text-adm-text-secondary">来路网站 Top 8</h4>
               <HorizontalBarChart items={srcList} color="#3b82f6" />
             </div>
-            <div>
+            <div className="min-w-0 rounded-xl bg-adm-input/20 p-2 sm:bg-transparent sm:p-0">
               <h4 className="mb-2 text-xs font-medium text-adm-text-secondary">受访页 Top 8</h4>
               <HorizontalBarChart items={interviewList} color="#8b5cf6" />
             </div>
-            <div>
+            <div className="min-w-0 rounded-xl bg-adm-input/20 p-2 sm:bg-transparent sm:p-0">
               <h4 className="mb-2 text-xs font-medium text-adm-text-secondary">入口页 Top 8</h4>
               <HorizontalBarChart items={entryList} color="#10b981" />
             </div>
           </div>
 
           {/* 明细表格 */}
-          <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
+          <div className="mt-3 grid grid-cols-1 gap-3 sm:mt-4 sm:gap-4 lg:grid-cols-2">
             <DetailTable title="受访页详情" items={interviewList} label="查看次数" />
             <DetailTable title="入口页详情" items={entryList} label="入口次数" />
           </div>

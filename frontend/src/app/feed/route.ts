@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getApiUrl } from "@/lib/api-fetch";
+import type { Post } from "@/lib/mock-data";
 
 const API_URL = getApiUrl();
 
@@ -42,7 +43,7 @@ function cnCount(n: number): string {
  * 2. 有文字内容取前 50 字符（超长加省略号）
  * 3. 纯媒体动态按类型生成：分享了N张图片 / 分享了一个视频 / 分享了一首音乐 / 分享了一个链接
  */
-function generateTitle(post: any): string {
+function generateTitle(post: Post): string {
   if (post.title) return post.title;
 
   const text = stripHtml(post.content || "");
@@ -78,7 +79,7 @@ function generateTitle(post: any): string {
 }
 
 /** 生成摘要：有文字取前 200 字符（超长加省略号），纯媒体用自动标题 */
-function generateExcerpt(post: any): string {
+function generateExcerpt(post: Post): string {
   const fullText = stripHtml(post.content || "");
   if (post.excerpt) {
     // excerpt 可能已被截断（无省略号），若原文更长则补上
@@ -125,9 +126,9 @@ export async function GET() {
     let items = "";
     if (postsRes.ok) {
       const data = await postsRes.json();
-      const posts = data.data || [];
+      const posts: Post[] = Array.isArray(data.data) ? data.data : [];
       items = posts
-        .map((post: any) => {
+        .map((post) => {
           const title = generateTitle(post);
           const link = post.type === "article"
             ? `${domain}/articles/${post.shortId || post.id}`

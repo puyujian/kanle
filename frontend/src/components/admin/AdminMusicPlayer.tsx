@@ -55,7 +55,7 @@ export default function AdminMusicPlayer() {
           mp3url: string;
           lyric: string;
           platform?: string;
-          extra?: Record<string, any>;
+          extra?: Record<string, unknown>;
         }>;
         currentIndex?: number;
       }) => {

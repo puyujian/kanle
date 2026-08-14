@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Loader2, X, Music, Upload, ImagePlus, Search } from "lucide-react";
-import type { PostMusic } from "@/lib/mock-data";
+import type { MusicSearchItem, PostMusic } from "@/lib/mock-data";
 import { MUSIC_PLUGIN_LABELS } from "@/lib/mock-data";
 import { uploadImage, toAbsoluteUrl, toHttps } from "@/lib/upload";
 import LyricEditor from "@/components/LyricEditor";
@@ -33,7 +33,7 @@ export default function MusicPanel({
   const [plugins, setPlugins] = useState<{ platform: string; name: string }[]>([]);
   const [selectedPlatform, setSelectedPlatform] = useState("");
   const [keyword, setKeyword] = useState("");
-  const [results, setResults] = useState<any[]>([]);
+  const [results, setResults] = useState<MusicSearchItem[]>([]);
   const [searching, setSearching] = useState(false);
   const [loadingMusic, setLoadingMusic] = useState(false);
 
@@ -124,14 +124,14 @@ export default function MusicPanel({
     }
   };
 
-  const handlePickSong = async (item: any) => {
+  const handlePickSong = async (item: MusicSearchItem) => {
     setLoadingMusic(true);
     setError("");
     try {
       const standardFields = new Set([
         "id", "platform", "title", "artist", "album", "artwork", "url", "lrc", "rawLrc", "duration",
       ]);
-      const extra: Record<string, any> = {};
+      const extra: Record<string, unknown> = {};
       for (const [k, v] of Object.entries(item)) {
         if (!standardFields.has(k) && v != null && v !== "") {
           extra[k] = v;
@@ -213,8 +213,8 @@ export default function MusicPanel({
     try {
       const url = await uploadImage(file, token);
       setCover(url);
-    } catch (e: any) {
-      setError(e.message || "封面上传失败");
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "封面上传失败");
     } finally {
       setUploadingCover(false);
     }
@@ -386,7 +386,7 @@ export default function MusicPanel({
                             className="flex w-full items-center gap-2.5 rounded-lg p-2 text-left transition-colors hover:bg-adm-card-hover disabled:opacity-50"
                           >
                             {item.artwork ? (
-                              // eslint-disable-next-line @next/next/no-img-element
+
                               <img
                                 src={toHttps(item.artwork)}
                                 alt=""
@@ -426,7 +426,7 @@ export default function MusicPanel({
                 </label>
                 {cover ? (
                   <div className="relative inline-block">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    { }
                     <img
                       src={toAbsoluteUrl(cover)}
                       alt="封面预览"

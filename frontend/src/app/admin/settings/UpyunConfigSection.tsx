@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Cloud, Save, Check, Eye, EyeOff, ExternalLink, Zap, AlertTriangle, FolderUp } from "lucide-react";
+import { Cloud, Save, Check, Eye, EyeOff, Zap, AlertTriangle, FolderUp } from "lucide-react";
 import { apiFetch } from "@/lib/api-fetch";
 
 export default function UpyunConfigSection() {

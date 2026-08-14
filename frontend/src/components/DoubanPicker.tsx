@@ -186,7 +186,7 @@ export default function DoubanPicker({ open, onClose, onSelect }: DoubanPickerPr
                   onClick={() => handleSelect(item)}
                   className="flex w-full items-center gap-3 rounded-xl p-2 text-left transition-colors hover:bg-black/5 dark:hover:bg-white/5"
                 >
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  { }
                   <img
                     src={getImageUrl(item.cover)}
                     alt=""

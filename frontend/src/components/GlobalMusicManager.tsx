@@ -42,7 +42,7 @@ function parseLyric(lrc: string): LyricLine[] | null {
 async function fetchLyric(
   platform: string,
   id: string,
-  extra?: Record<string, any>,
+  extra?: Record<string, unknown>,
   signal?: AbortSignal
 ): Promise<string | null> {
   if (!platform || !id) return null;
@@ -247,7 +247,7 @@ export default function GlobalMusicManager() {
       platform?: string;
       musicId?: string;
       neteaseId?: string;
-      extra?: Record<string, any>;
+      extra?: Record<string, unknown>;
       postId?: string;
       id?: string;
       lyric?: string;

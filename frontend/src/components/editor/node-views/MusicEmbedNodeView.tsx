@@ -19,11 +19,6 @@ export default function MusicEmbedNodeView({
   const [editing, setEditing] = useState(false);
 
   const music = decodePayload<PostMusic>(node.attrs.payload);
-  if (!music) return null;
-
-  const cover = music.cover ? getImageUrl(music.cover) : "";
-  const title = music.name || "未知歌曲";
-  const artist = music.artist || "未知艺术家";
 
   const handleEditConfirm = useCallback(
     (newMusic: PostMusic) => {
@@ -32,6 +27,12 @@ export default function MusicEmbedNodeView({
     },
     [updateAttributes]
   );
+
+  if (!music) return null;
+
+  const cover = music.cover ? getImageUrl(music.cover) : "";
+  const title = music.name || "未知歌曲";
+  const artist = music.artist || "未知艺术家";
 
   const stopInteraction = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -46,7 +47,7 @@ export default function MusicEmbedNodeView({
       <div className="embed-block embed-music" data-drag-handle>
         <span className="embed-cover">
           {cover ? (
-            // eslint-disable-next-line @next/next/no-img-element
+
             <img src={cover} alt="" />
           ) : (
             <span className="embed-cover-placeholder">

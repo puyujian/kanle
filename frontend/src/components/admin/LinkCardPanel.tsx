@@ -125,7 +125,7 @@ export default function LinkCardPanel({
         <div className="mt-4 rounded-lg border border-adm-border bg-adm-bg p-3">
           <div className="flex gap-3">
             {preview.image && (
-              // eslint-disable-next-line @next/next/no-img-element
+
               <img
                 src={toAbsoluteUrl(preview.image)}
                 alt=""
@@ -152,7 +152,7 @@ export default function LinkCardPanel({
       {!preview && !loading && !error && (
         <div className="mt-4 flex flex-col items-center justify-center py-8 text-adm-text-tertiary">
           <Link2 className="h-8 w-8 mb-2 opacity-40" />
-          <p className="text-xs">输入链接后点击"获取"预览</p>
+          <p className="text-xs">输入链接后点击“获取”预览</p>
         </div>
       )}
     </AdminModal>

@@ -71,7 +71,7 @@ export default function CommentSection({
   // 同步外部传入的回复目标，并同步聚焦输入框（useLayoutEffect 保证在用户手势栈内）
   useLayoutEffect(() => {
     if (initialReplyTo) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
+
       setReplyTo(initialReplyTo);
       editorRef.current?.focus();
     }
@@ -87,7 +87,7 @@ export default function CommentSection({
 
   useEffect(() => {
     const user = getCurrentUser();
-    // eslint-disable-next-line react-hooks/set-state-in-effect
+
     setCurrentUser(user);
     if (user && !user.isLoggedIn) {
       setFormNickname(user.nickname);

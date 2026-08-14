@@ -125,7 +125,7 @@ export default function PostCard({ post, index, onDelete, fillEmbeds = false }: 
   // cookie 自动随请求携带，SSR 时也会准确，无需前端 localStorage 兜底。
   useEffect(() => {
     setLiked(!!post.meLiked);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+
   }, [post.id, post.meLiked]);
 
   const handlePin = async () => {

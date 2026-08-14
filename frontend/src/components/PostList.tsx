@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import PostCard from "@/components/PostCard";
 import { useSiteSettings } from "@/lib/site-settings-store";
 import { authFetchHeaders } from "@/lib/auth";
+import type { Post } from "@/lib/mock-data";
 
 const REVALIDATE_SECRET = process.env.NEXT_PUBLIC_REVALIDATE_SECRET || "kanle-revalidate";
 
@@ -12,7 +13,7 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000/api";
 const PAGE_SIZE = 10;
 
 interface PostListProps {
-  initialPosts: any[];
+  initialPosts: Post[];
   initialHasMore: boolean;
   initialPage: number;
 }
@@ -23,7 +24,7 @@ export default function PostList({ initialPosts, initialHasMore, initialPage }: 
   const [hasMore, setHasMore] = useState(initialHasMore);
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState(false);
-  const [ads, setAds] = useState<any[]>([]);
+  const [ads, setAds] = useState<Post[]>([]);
   const sentinelRef = useRef<HTMLDivElement>(null);
   const loadingRef = useRef(false);
   const fetchSettings = useSiteSettings((s) => s.fetchSettings);
@@ -172,18 +173,12 @@ export default function PostList({ initialPosts, initialHasMore, initialPage }: 
     return () => observer.disconnect();
   }, [loadMore]);
 
-  if (posts.length === 0) {
-    return (
-      <div className="py-12 text-center text-sm text-wechat-time">暂无动态</div>
-    );
-  }
-
   // 构建展示列表：在第 5 个位置插入一条随机广告（广告作为第 5 个展示项）
   // 后续不再插入广告，避免广告刷屏
   // 使用 useMemo 稳定随机选择，避免每次重渲染都换广告
   const displayList = useMemo(() => {
     const AD_POSITION = 5;
-    const list: any[] = [];
+    const list: Array<Post & { _isAd?: boolean }> = [];
     posts.forEach((post, idx) => {
       // 在第 AD_POSITION 条动态前插入广告，使广告成为第 5 个展示项
       if (idx + 1 === AD_POSITION && ads.length > 0) {
@@ -194,6 +189,12 @@ export default function PostList({ initialPosts, initialHasMore, initialPage }: 
     });
     return list;
   }, [posts, ads]);
+
+  if (posts.length === 0) {
+    return (
+      <div className="py-12 text-center text-sm text-wechat-time">暂无动态</div>
+    );
+  }
 
   return (
     <>

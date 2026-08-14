@@ -386,7 +386,7 @@ export default function ArticleEditorPage({ articleId }: ArticleEditorPageProps)
               </label>
               {cover ? (
                 <div className="group relative">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  { }
                   <img
                     src={toAbsoluteUrl(cover)}
                     alt="封面"

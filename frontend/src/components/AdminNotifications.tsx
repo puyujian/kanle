@@ -168,20 +168,6 @@ export default function AdminNotifications({ variant = "mobile" }: AdminNotifica
     }
   };
 
-  const collapse = () => {
-    if (!user?.token) return;
-    setPage(1);
-    fetch(`${API_URL}/notifications?page=1&limit=5`, {
-      headers: { Authorization: `Bearer ${user.token}` },
-    })
-      .then((res) => (res.ok ? res.json() : { data: [], pagination: { hasMore: false } }))
-      .then((data) => {
-        setItems(Array.isArray(data.data) ? data.data : []);
-        setHasMore(data.pagination?.hasMore || false);
-      })
-      .catch(() => {});
-  };
-
   // IntersectionObserver：滚动到底部自动加载更多
   useEffect(() => {
     if (!sentinelRef.current) return;
@@ -294,7 +280,7 @@ export default function AdminNotifications({ variant = "mobile" }: AdminNotifica
                   className="flex w-full items-start gap-2 rounded-lg px-1.5 py-2 text-left transition-colors hover:bg-wechat-hover dark:hover:bg-white/5"
                 >
                   <div className="relative h-8 w-8 shrink-0 overflow-hidden rounded-[6px] bg-wechat-bubble">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    { }
                     <img
                       src={actorAvatarUrl(n.actorEmail || "", n.actor, 64)}
                       alt={n.actor}
@@ -454,7 +440,7 @@ export default function AdminNotifications({ variant = "mobile" }: AdminNotifica
                         >
                           {/* 头像 */}
                           <div className="relative h-10 w-10 shrink-0 overflow-hidden rounded-[8px] bg-wechat-bubble">
-                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            { }
                             <img
                               src={actorAvatarUrl(n.actorEmail || "", n.actor, 80)}
                               alt={n.actor}

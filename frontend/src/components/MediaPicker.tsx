@@ -36,12 +36,6 @@ interface MediaPickerProps {
   title?: string;
 }
 
-function formatSize(bytes: number): string {
-  if (bytes < 1024) return `${bytes}B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)}KB`;
-  return `${(bytes / 1024 / 1024).toFixed(1)}MB`;
-}
-
 function CategoryIcon({ item }: { item: PickerMediaItem }) {
   if (item.category === "image" && item.livePhotoVideo) {
     return <ImageIcon className="h-4 w-4 text-green-500" />;
@@ -89,7 +83,7 @@ export default function MediaPicker({
         setLoading(false);
         setLoadingMore(false);
       }
-      // eslint-disable-next-line react-hooks/exhaustive-deps
+
     },
     [category]
   );

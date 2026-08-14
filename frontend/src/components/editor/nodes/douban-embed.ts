@@ -1,4 +1,4 @@
-import { Node, mergeAttributes } from "@tiptap/core";
+import { Node, mergeAttributes, type Attributes } from "@tiptap/core";
 import { ReactNodeViewRenderer } from "@tiptap/react";
 import DoubanEmbedNodeView from "../node-views/DoubanEmbedNodeView";
 
@@ -14,7 +14,7 @@ export const DoubanEmbed = Node.create({
       payload: {
         default: "",
         parseHTML: (element: HTMLElement) => element.getAttribute("data-payload") || "",
-        renderHTML: (attributes: Record<string, any>) => {
+        renderHTML: (attributes: Attributes) => {
           if (!attributes.payload) return {};
           return { "data-payload": attributes.payload };
         },

@@ -44,11 +44,26 @@ export interface PostMusic {
    * 插件特定字段对象（songmid/hash/bvid/cid 等），透传给后端插件 getMediaSource/getLyric。
    * 对齐洛水 IMusicItem 全字段方案：搜索→存储→播放全程保留插件字段。
    */
-  extra?: Record<string, any>;
+  extra?: Record<string, unknown>;
   /** LRC 歌词文本（上传歌曲时由用户编辑/标记，播放时客户端解析） */
   lrc?: string;
   /** 进入文章详情页时是否自动播放此音乐 */
   autoplay?: boolean;
+}
+
+/** MusicFree 插件搜索结果；标准字段之外的插件字段会原样透传。 */
+export interface MusicSearchItem {
+  id?: string | number;
+  platform?: string;
+  title?: string;
+  artist?: string;
+  album?: string;
+  artwork?: string;
+  url?: string;
+  lrc?: string;
+  rawLrc?: string;
+  duration?: number;
+  [key: string]: unknown;
 }
 
 export interface LinkCard {

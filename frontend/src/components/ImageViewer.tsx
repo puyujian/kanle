@@ -132,7 +132,7 @@ export default function ImageViewer({
         v.play().catch(() => {});
       });
     }
-  }, [playLive, index]);
+  }, [playLive, index, muted]);
 
   // 声音开关自动隐藏：视频播放后 3 秒淡出，触摸/点击重新显示
   const revealControls = useCallback(() => {
@@ -488,7 +488,7 @@ export default function ImageViewer({
       el.removeEventListener("touchend", onTouchEnd);
       el.removeEventListener("touchcancel", onTouchEnd);
     };
-  }, [close, cancelClose, count, goNext, goPrev, toggleZoomAtPoint]);
+  }, [close, cancelClose, closing, count, goNext, goPrev, stopLiveVideo, toggleZoomAtPoint]);
 
   // 桌面拖拽（放大时拖拽 + 最小缩放时水平滑动切换）
   useEffect(() => {
@@ -808,7 +808,7 @@ export default function ImageViewer({
       )}
 
       {/* 图片层（始终存在，可缩放/拖拽；实况视频播放时淡出） */}
-      {/* eslint-disable-next-line @next/next/no-img-element */}
+      { }
       <img
         ref={imgRef}
         key={index}

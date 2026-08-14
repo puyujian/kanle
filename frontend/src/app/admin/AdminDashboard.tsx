@@ -111,9 +111,23 @@ function useIsDark() {
   return dark;
 }
 
+/** 根据视口调整图表密度，避免移动端图例和坐标轴互相挤压 */
+function useIsMobile() {
+  const [mobile, setMobile] = useState(false);
+  useEffect(() => {
+    const media = window.matchMedia("(max-width: 639px)");
+    const update = () => setMobile(media.matches);
+    update();
+    media.addEventListener("change", update);
+    return () => media.removeEventListener("change", update);
+  }, []);
+  return mobile;
+}
+
 /** echarts 柱状图：近7天活动趋势（动态/评论/点赞） */
 function BarChart({ data }: { data: TimeSeriesItem[] }) {
   const isDark = useIsDark();
+  const isMobile = useIsMobile();
   const textColor = isDark ? "rgba(255,255,255,0.65)" : "rgba(0,0,0,0.65)";
   const axisLineColor = isDark ? "rgba(255,255,255,0.15)" : "rgba(0,0,0,0.15)";
 
@@ -127,20 +141,22 @@ function BarChart({ data }: { data: TimeSeriesItem[] }) {
     },
     legend: {
       data: ["动态", "文章", "评论", "点赞"],
+      type: "scroll",
       top: 0,
-      right: 0,
+      left: isMobile ? 0 : "auto",
+      right: isMobile ? 0 : 0,
       icon: "circle",
       itemWidth: 8,
       itemHeight: 8,
       textStyle: { color: textColor, fontSize: 11 },
     },
-    grid: { left: "2%", right: "2%", bottom: "2%", top: 36, containLabel: true },
+    grid: { left: isMobile ? 0 : "2%", right: isMobile ? 2 : "2%", bottom: "2%", top: 36, containLabel: true },
     xAxis: {
       type: "category",
       data: data.map((d) => d.label),
       axisLine: { lineStyle: { color: axisLineColor } },
       axisTick: { show: false },
-      axisLabel: { color: textColor, fontSize: 10 },
+      axisLabel: { color: textColor, fontSize: isMobile ? 9 : 10, interval: 0 },
     },
     yAxis: {
       type: "value",
@@ -148,7 +164,7 @@ function BarChart({ data }: { data: TimeSeriesItem[] }) {
       axisLine: { show: false },
       axisTick: { show: false },
       splitLine: { lineStyle: { color: axisLineColor, type: "dashed" } },
-      axisLabel: { color: textColor, fontSize: 10 },
+      axisLabel: { color: textColor, fontSize: isMobile ? 9 : 10 },
     },
     series: [
       { name: "动态", type: "bar", data: data.map((d) => d.posts), itemStyle: { color: "#3b82f6", borderRadius: [3, 3, 0, 0] }, barGap: "10%", barCategoryGap: "30%" },
@@ -156,12 +172,12 @@ function BarChart({ data }: { data: TimeSeriesItem[] }) {
       { name: "评论", type: "bar", data: data.map((d) => d.comments), itemStyle: { color: "#f43f5e", borderRadius: [3, 3, 0, 0] } },
       { name: "点赞", type: "bar", data: data.map((d) => d.likes), itemStyle: { color: "#f59e0b", borderRadius: [3, 3, 0, 0] } },
     ],
-  }), [data, isDark, textColor, axisLineColor]);
+  }), [data, isDark, isMobile, textColor, axisLineColor]);
 
   return (
     <ReactECharts
       option={option}
-      style={{ height: 240, width: "100%" }}
+      style={{ height: isMobile ? 220 : 240, width: "100%" }}
       opts={{ renderer: "svg" }}
       notMerge
     />
@@ -171,6 +187,7 @@ function BarChart({ data }: { data: TimeSeriesItem[] }) {
 /** echarts 环形图：内容分布（动态/文章/评论/点赞） */
 function DonutChart({ items }: { items: { label: string; value: number; color: string }[] }) {
   const isDark = useIsDark();
+  const isMobile = useIsMobile();
   const textColor = isDark ? "rgba(255,255,255,0.65)" : "rgba(0,0,0,0.65)";
   const total = items.reduce((s, i) => s + i.value, 0);
 
@@ -184,7 +201,7 @@ function DonutChart({ items }: { items: { label: string; value: number; color: s
     },
     legend: {
       orient: "vertical",
-      right: 0,
+      right: isMobile ? "2%" : 0,
       top: "center",
       icon: "circle",
       itemWidth: 8,
@@ -197,12 +214,12 @@ function DonutChart({ items }: { items: { label: string; value: number; color: s
     },
     graphic: {
       type: "text",
-      left: "28%",
+      left: isMobile ? "27%" : "28%",
       top: "center",
       style: {
         text: `{a|${total}}\n{b|总数}`,
         rich: {
-          a: { fontSize: 22, fontWeight: 700, fill: isDark ? "rgba(255,255,255,0.9)" : "rgba(0,0,0,0.9)", align: "center" },
+          a: { fontSize: isMobile ? 19 : 22, fontWeight: 700, fill: isDark ? "rgba(255,255,255,0.9)" : "rgba(0,0,0,0.9)", align: "center" },
           b: { fontSize: 11, fill: textColor, align: "center" },
         },
         textAlign: "center",
@@ -211,7 +228,7 @@ function DonutChart({ items }: { items: { label: string; value: number; color: s
     series: [{
       type: "pie",
       radius: ["55%", "75%"],
-      center: ["28%", "50%"],
+      center: [isMobile ? "27%" : "28%", "50%"],
       avoidLabelOverlap: false,
       label: { show: false },
       labelLine: { show: false },
@@ -219,12 +236,12 @@ function DonutChart({ items }: { items: { label: string; value: number; color: s
       emphasis: { label: { show: true, fontSize: 14, fontWeight: "bold" } },
       data: items.map((i) => ({ name: i.label, value: i.value, itemStyle: { color: i.color } })),
     }],
-  }), [items, isDark, textColor, total]);
+  }), [items, isDark, isMobile, textColor, total]);
 
   return (
     <ReactECharts
       option={option}
-      style={{ height: 180, width: "100%" }}
+      style={{ height: isMobile ? 164 : 180, width: "100%" }}
       opts={{ renderer: "svg" }}
       notMerge
     />
@@ -288,19 +305,19 @@ export default function AdminDashboard() {
   const cards = [
     {
       label: "动态", value: stats?.posts || 0, icon: FileText,
-      trend: trend?.posts ?? null, color: "text-[#3b82f6]",
+      trend: trend?.posts ?? null, color: "text-[#3b82f6]", surface: "bg-[#3b82f6]/10", accent: "bg-[#3b82f6]",
     },
     {
       label: "文章", value: stats?.articles || 0, icon: BookText,
-      trend: trend?.articles ?? null, color: "text-[#8b5cf6]",
+      trend: trend?.articles ?? null, color: "text-[#8b5cf6]", surface: "bg-[#8b5cf6]/10", accent: "bg-[#8b5cf6]",
     },
     {
       label: "评论", value: stats?.comments || 0, icon: MessageCircle,
-      trend: trend?.comments ?? null, color: "text-[#f43f5e]",
+      trend: trend?.comments ?? null, color: "text-[#f43f5e]", surface: "bg-[#f43f5e]/10", accent: "bg-[#f43f5e]",
     },
     {
       label: "点赞", value: stats?.likes || 0, icon: Heart,
-      trend: trend?.likes ?? null, color: "text-[#f59e0b]",
+      trend: trend?.likes ?? null, color: "text-[#f59e0b]", surface: "bg-[#f59e0b]/10", accent: "bg-[#f59e0b]",
     },
   ];
 
@@ -315,52 +332,53 @@ export default function AdminDashboard() {
   ];
 
   return (
-    <div>
-      <div className="mb-6 flex items-center gap-3">
-        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-adm-input">
-          <LayoutDashboard className="h-5 w-5 text-adm-text-secondary" />
+    <div className="pb-[max(0px,env(safe-area-inset-bottom))]">
+      <div className="mb-4 flex items-center gap-2.5 sm:mb-6 sm:gap-3">
+        <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-adm-input sm:h-10 sm:w-10">
+          <LayoutDashboard className="h-[18px] w-[18px] text-adm-text-secondary sm:h-5 sm:w-5" />
         </div>
         <div>
-          <h2 className="text-xl font-bold text-adm-text">仪表盘</h2>
-          <p className="text-sm text-adm-text-secondary">博客数据概览与快捷操作</p>
+          <h2 className="text-lg font-bold leading-tight text-adm-text sm:text-xl">仪表盘</h2>
+          <p className="mt-0.5 text-xs text-adm-text-secondary sm:text-sm">博客数据概览与快捷操作</p>
         </div>
       </div>
 
       {/* 统计卡片 */}
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-2.5 sm:gap-3 lg:grid-cols-4">
         {cards.map((card) => {
           const Icon = card.icon;
           return (
-            <div key={card.label} className="rounded-2xl border border-adm-border bg-adm-card p-4 transition-shadow hover:shadow-sm">
+            <div key={card.label} className="relative overflow-hidden rounded-xl border border-adm-border bg-adm-card p-3 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md sm:rounded-2xl sm:p-4">
+              <div className={`absolute inset-x-3 top-0 h-0.5 rounded-b-full opacity-80 ${card.accent}`} />
               <div className="flex items-center justify-between">
-                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-adm-input">
+                <div className={`flex h-8 w-8 items-center justify-center rounded-lg sm:h-9 sm:w-9 sm:rounded-xl ${card.surface}`}>
                   <Icon className={`h-[18px] w-[18px] ${card.color}`} />
                 </div>
                 {card.trend !== null && (
-                  <span className={`flex items-center gap-0.5 text-xs font-medium ${card.trend > 0 ? "text-adm-primary" : card.trend < 0 ? "text-adm-danger" : "text-adm-text-tertiary"}`}>
+                  <span className={`flex items-center gap-0.5 rounded-full bg-adm-input/70 px-1.5 py-0.5 text-[10px] font-semibold sm:text-xs ${card.trend > 0 ? "text-adm-primary" : card.trend < 0 ? "text-adm-danger" : "text-adm-text-tertiary"}`}>
                     {card.trend > 0 ? <TrendingUp className="h-3 w-3" /> : card.trend < 0 ? <TrendingDown className="h-3 w-3" /> : null}
                     {card.trend > 0 ? `+${card.trend}%` : card.trend < 0 ? `${card.trend}%` : "0%"}
                   </span>
                 )}
               </div>
-              <div className="mt-3 text-2xl font-bold text-adm-text">{card.value}</div>
-              <div className="text-xs text-adm-text-secondary">{card.label}</div>
+              <div className="mt-2.5 text-xl font-bold leading-none text-adm-text sm:mt-3 sm:text-2xl">{card.value}</div>
+              <div className="mt-1 text-[11px] text-adm-text-secondary sm:text-xs">{card.label}</div>
             </div>
           );
         })}
       </div>
 
       {/* 图表区域 */}
-      <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-3">
+      <div className="mt-3 grid grid-cols-1 gap-3 sm:mt-4 sm:gap-4 lg:grid-cols-3">
         {/* 柱状图 */}
-        <div className="rounded-2xl border border-adm-border bg-adm-card p-5 lg:col-span-2">
-          <h3 className="mb-4 text-sm font-semibold text-adm-text">近7天活动趋势</h3>
+        <div className="min-w-0 rounded-xl border border-adm-border bg-adm-card p-3.5 shadow-sm sm:rounded-2xl sm:p-5 lg:col-span-2">
+          <h3 className="mb-2 text-sm font-semibold text-adm-text sm:mb-4">近7天活动趋势</h3>
           {stats?.timeSeries && <BarChart data={stats.timeSeries} />}
         </div>
 
         {/* 环形图 */}
-        <div className="rounded-2xl border border-adm-border bg-adm-card p-5">
-          <h3 className="mb-4 text-sm font-semibold text-adm-text">内容分布</h3>
+        <div className="min-w-0 rounded-xl border border-adm-border bg-adm-card p-3.5 shadow-sm sm:rounded-2xl sm:p-5">
+          <h3 className="mb-2 text-sm font-semibold text-adm-text sm:mb-4">内容分布</h3>
           <DonutChart items={donutItems} />
         </div>
       </div>
@@ -369,12 +387,12 @@ export default function AdminDashboard() {
       <LaAnalyticsSection />
 
       {/* 快捷操作 */}
-      <div className="mt-4 rounded-2xl border border-adm-border bg-adm-card p-5">
-        <div className="mb-4 flex items-center justify-between">
+      <div className="mt-3 rounded-xl border border-adm-border bg-adm-card p-3.5 shadow-sm sm:mt-4 sm:rounded-2xl sm:p-5">
+        <div className="mb-3 flex items-center justify-between sm:mb-4">
           <h3 className="text-sm font-semibold text-adm-text">快捷操作</h3>
           <button
             onClick={() => setEditingShortcuts(!editingShortcuts)}
-            className="flex items-center gap-1 rounded-lg px-2 py-1 text-xs text-adm-text-secondary transition-colors hover:bg-adm-card-hover"
+            className="flex min-h-9 items-center gap-1 rounded-lg px-2.5 py-1 text-xs text-adm-text-secondary transition-colors hover:bg-adm-card-hover"
           >
             {editingShortcuts ? <X className="h-3.5 w-3.5" /> : <Plus className="h-3.5 w-3.5" />}
             {editingShortcuts ? "完成" : "自定义"}
@@ -388,7 +406,7 @@ export default function AdminDashboard() {
               <button
                 key={s.key}
                 onClick={() => s.external ? window.open(s.href, "_blank") : router.push(s.href)}
-                className="group flex items-center gap-3 rounded-xl border border-adm-border bg-adm-input/50 px-3 py-2.5 text-left transition-colors hover:border-adm-text-tertiary hover:bg-adm-card-hover"
+                className="group flex min-h-14 items-center gap-3 rounded-xl border border-adm-border bg-adm-input/50 px-3 py-2.5 text-left transition-colors hover:border-adm-text-tertiary hover:bg-adm-card-hover"
               >
                 <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-adm-input">
                   <Icon className="h-4 w-4 text-adm-text-secondary" />
@@ -449,14 +467,14 @@ export default function AdminDashboard() {
       </div>
 
       {/* 最近动态 + 最近评论 */}
-      <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
+      <div className="mt-3 grid grid-cols-1 gap-3 sm:mt-4 sm:gap-4 lg:grid-cols-2">
         {/* 最近动态 */}
-        <div className="rounded-2xl border border-adm-border bg-adm-card p-5">
+        <div className="rounded-xl border border-adm-border bg-adm-card p-3.5 shadow-sm sm:rounded-2xl sm:p-5">
           <h3 className="mb-3 text-sm font-semibold text-adm-text">最近动态</h3>
           {stats?.recentPosts && stats.recentPosts.length > 0 ? (
             <div className="space-y-2">
               {stats.recentPosts.map((post) => (
-                <div key={post.id} className="flex items-start gap-2.5 rounded-lg p-2 transition-colors hover:bg-adm-card-hover">
+                <div key={post.id} className="flex items-start gap-2.5 rounded-lg bg-adm-input/20 p-2.5 transition-colors hover:bg-adm-card-hover sm:bg-transparent sm:p-2">
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-1.5">
                       <span className="text-xs font-medium text-adm-text">{post.author}</span>
@@ -476,12 +494,12 @@ export default function AdminDashboard() {
         </div>
 
         {/* 最近评论 */}
-        <div className="rounded-2xl border border-adm-border bg-adm-card p-5">
+        <div className="rounded-xl border border-adm-border bg-adm-card p-3.5 shadow-sm sm:rounded-2xl sm:p-5">
           <h3 className="mb-3 text-sm font-semibold text-adm-text">最近评论</h3>
           {stats?.recentComments && stats.recentComments.length > 0 ? (
             <div className="space-y-2">
               {stats.recentComments.map((comment) => (
-                <div key={comment.id} className="flex items-start gap-2.5 rounded-lg p-2 transition-colors hover:bg-adm-card-hover">
+                <div key={comment.id} className="flex items-start gap-2.5 rounded-lg bg-adm-input/20 p-2.5 transition-colors hover:bg-adm-card-hover sm:bg-transparent sm:p-2">
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-1.5">
                       <span className="text-xs font-medium text-adm-text">{comment.author}</span>

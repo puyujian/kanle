@@ -16,11 +16,6 @@ export default function ArticleEmbedNodeView({
   const [showPicker, setShowPicker] = useState(false);
   const defaultCover = useSiteSettings((s) => s.defaultCover);
   const article = decodePayload<ArticleEmbedData>(node.attrs.payload);
-  if (!article) return null;
-
-  const cover = (article.cover || defaultCover) ? getImageUrl(article.cover || defaultCover) : "";
-  const title = article.title || "文章";
-  const excerpt = article.excerpt || "";
 
   const stopInteraction = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -53,6 +48,12 @@ export default function ArticleEmbedNodeView({
     [updateAttributes]
   );
 
+  if (!article) return null;
+
+  const cover = (article.cover || defaultCover) ? getImageUrl(article.cover || defaultCover) : "";
+  const title = article.title || "文章";
+  const excerpt = article.excerpt || "";
+
   return (
     <NodeViewWrapper
       as="div"
@@ -61,7 +62,7 @@ export default function ArticleEmbedNodeView({
       <div className="embed-block embed-article" data-drag-handle>
         <span className="embed-cover">
           {cover ? (
-            // eslint-disable-next-line @next/next/no-img-element
+
             <img src={cover} alt="" />
           ) : (
             <span className="embed-cover-placeholder">

@@ -125,7 +125,7 @@ export default function ArticlePicker({
               className="flex w-full items-center gap-3 rounded-lg border border-adm-border bg-adm-card p-2.5 text-left transition-colors hover:bg-adm-card-hover"
             >
               {(article.cover || defaultCover) ? (
-                // eslint-disable-next-line @next/next/no-img-element
+
                 <img
                   src={getImageUrl(article.cover || defaultCover)}
                   alt=""

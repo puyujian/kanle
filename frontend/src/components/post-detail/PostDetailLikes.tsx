@@ -8,8 +8,6 @@ interface PostDetailLikesProps {
   likes: string[];
 }
 
-const VISITOR_NAMES = new Set(["访客", "游客"]);
-
 export default function PostDetailLikes({ likes }: PostDetailLikesProps) {
   if (likes.length === 0) return null;
 

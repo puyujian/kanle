@@ -17,14 +17,14 @@ export function resolvePostMusicUrl(music: {
   platform?: string;
   musicId?: string;
   songmid?: string;
-  extra?: Record<string, any>;
+  extra?: Record<string, unknown>;
 }): string {
   // MusicFree 插件源 → 代理端点（实时解析，永不过期）
   if (music.source === "musicfree" && music.platform && music.musicId) {
     const params = new URLSearchParams();
     params.set("platform", music.platform);
     params.set("id", String(music.musicId));
-    const extra: Record<string, any> = { ...(music.extra || {}) };
+    const extra: Record<string, unknown> = { ...(music.extra || {}) };
     if (music.songmid && !extra.songmid) extra.songmid = music.songmid;
     for (const [k, v] of Object.entries(extra)) {
       if (v != null && v !== "") params.set(k, String(v));
@@ -58,7 +58,7 @@ export interface PostMusicInfo {
    * 插件特定字段对象（songmid/hash/bvid 等），透传给后端 /api/music/lyric。
    * 对齐洛水 IMusicItem 全字段方案。
    */
-  extra?: Record<string, any>;
+  extra?: Record<string, unknown>;
   /** LRC 歌词文本（上传歌曲透传，顶栏直接解析） */
   lrc?: string;
 }
@@ -73,7 +73,7 @@ export interface PlaylistTrack {
   lyric: string;
   platform?: string;
   /** 插件特定字段（songmid/hash/bvid ...），透传给后端获取歌词/播放地址 */
-  extra?: Record<string, any>;
+  extra?: Record<string, unknown>;
 }
 
 /** 解析后的歌词行 */

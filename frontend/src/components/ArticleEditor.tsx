@@ -347,7 +347,7 @@ export default function ArticleEditor({
   // Set up slash command storage callbacks
   useEffect(() => {
     if (!editor) return;
-    const slashStorage = (editor.storage as Record<string, any>).slashCommand as {
+    const slashStorage = (editor.storage as unknown as { slashCommand: {
       openImagePicker?: () => void;
       openLinkPanel?: () => void;
       openLinkCardPanel?: () => void;
@@ -355,7 +355,7 @@ export default function ArticleEditor({
       openVideoPanel?: () => void;
       openDoubanPicker?: () => void;
       openArticlePicker?: () => void;
-    };
+    } }).slashCommand;
     slashStorage.openImagePicker = () => {
       if (fileInputRef.current) fileInputRef.current.click();
     };
@@ -412,7 +412,7 @@ export default function ArticleEditor({
         editor.chain().focus().setImage({
           src: url,
           alt: "",
-        } as any).run();
+        }).run();
         // Apply style via setAttributes (CustomImage supports style attr)
         // The style is applied through the image node's style attribute
       } catch (err) {

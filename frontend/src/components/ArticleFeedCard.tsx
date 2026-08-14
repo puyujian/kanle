@@ -47,7 +47,7 @@ export default function ArticleFeedCard({ post }: ArticleFeedCardProps) {
         </span>
         {coverUrl && (
           <div className="h-14 w-20 shrink-0 overflow-hidden rounded">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
+            { }
             <img
               src={coverUrl}
               alt={post.title || "封面"}
