@@ -2,7 +2,7 @@ import { Heart } from "lucide-react";
 import { useState } from "react";
 import { Comment, formatCommentTime } from "@/lib/mock-data";
 import { renderTextWithEmoji } from "@/lib/emoji";
-import { cravatarUrl, actorAvatarUrl } from "@/lib/avatar";
+import { cravatarUrl, actorAvatarUrl, resolveAvatar } from "@/lib/avatar";
 
 type LikeInfo = { name: string; email?: string };
 
@@ -51,6 +51,7 @@ function likeAvatarUrl(like: LikeInfo, size = 40, nameToEmail?: Map<string, stri
 }
 
 function commentAvatarUrl(comment: Comment, size = 56): string {
+  if (comment.avatar) return resolveAvatar(comment.avatar, comment.email || comment.author, size);
   if (comment.email) return cravatarUrl(comment.email, size);
   return actorAvatarUrl("", comment.author, size);
 }

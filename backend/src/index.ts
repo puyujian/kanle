@@ -125,6 +125,7 @@ async function bootstrap() {
     try {
       await ensureColumn("comments", "status", "ENUM('pending','draft','published','rejected') NOT NULL DEFAULT 'published'");
       const sourceAdded = await ensureColumn("comments", "source", "ENUM('visitor','admin','ai') NOT NULL DEFAULT 'visitor'");
+      await ensureColumn("comments", "avatar", "VARCHAR(512) NULL");
       await ensureColumn("comments", "review_method", "ENUM('human','ai') NULL");
       await ensureColumn("comments", "review_reason", "TEXT NULL");
       await ensureColumn("comments", "reviewed_at", "DATETIME NULL");
@@ -139,8 +140,14 @@ async function bootstrap() {
       await ensureColumn("ai_settings", "comment_context_limit", "INT NOT NULL DEFAULT 10");
       await ensureColumn("ai_settings", "comment_reply_prompt", "TEXT NULL");
       await ensureColumn("ai_settings", "comment_moderation_prompt", "TEXT NULL");
+      await ensureColumn("ai_settings", "post_comment_enabled", "TINYINT(1) NOT NULL DEFAULT 0");
+      await ensureColumn("ai_settings", "post_comment_publish_mode", "ENUM('draft','published') NOT NULL DEFAULT 'draft'");
+      await ensureColumn("ai_settings", "post_comment_nickname", "VARCHAR(100) NOT NULL DEFAULT 'AI 助手'");
+      await ensureColumn("ai_settings", "post_comment_avatar", "VARCHAR(512) NOT NULL DEFAULT ''");
+      await ensureColumn("ai_settings", "post_comment_prompt", "TEXT NULL");
       await sequelize.query("UPDATE `ai_settings` SET `comment_reply_prompt` = '' WHERE `comment_reply_prompt` IS NULL");
       await sequelize.query("UPDATE `ai_settings` SET `comment_moderation_prompt` = '' WHERE `comment_moderation_prompt` IS NULL");
+      await sequelize.query("UPDATE `ai_settings` SET `post_comment_prompt` = '' WHERE `post_comment_prompt` IS NULL");
 
       // 历史博主评论只用于后台来源标识；迁移不会为历史评论创建 AI 任务。
       if (sourceAdded) {

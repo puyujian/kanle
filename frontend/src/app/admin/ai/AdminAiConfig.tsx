@@ -1,11 +1,14 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { Check, Eye, EyeOff, KeyRound, Loader2, RotateCcw, Save, Sparkles, TestTube2, Trash2 } from "lucide-react";
-import { apiFetch } from "@/lib/api-fetch";
+import { useEffect, useRef, useState } from "react";
+import { Bot, Check, Eye, EyeOff, KeyRound, Library, Loader2, RotateCcw, Save, Sparkles, TestTube2, Trash2, Upload } from "lucide-react";
+import { apiFetch, getToken } from "@/lib/api-fetch";
+import { uploadImage } from "@/lib/upload";
+import { actorAvatarUrl, resolveAvatar } from "@/lib/avatar";
+import MediaPicker from "@/components/MediaPicker";
 import type { AiMode } from "@/lib/ai-client";
 
-type AiPromptMode = AiMode | "comment_reply" | "comment_moderation";
+type AiPromptMode = AiMode | "comment_reply" | "comment_moderation" | "post_comment";
 
 interface AiConfig {
   enabled: boolean;
@@ -16,6 +19,10 @@ interface AiConfig {
   commentReplyEnabled: boolean;
   commentReplyPublishMode: "draft" | "published";
   commentContextLimit: number;
+  postCommentEnabled: boolean;
+  postCommentPublishMode: "draft" | "published";
+  postCommentNickname: string;
+  postCommentAvatar: string;
   apiKeyConfigured: boolean;
   apiKeyMasked: string;
   encryptionReady: boolean;
@@ -31,6 +38,7 @@ const MODE_LABELS: Array<{ mode: AiPromptMode; label: string; help: string }> = 
   { mode: "article_full", label: "完整文章", help: "可用变量：{{topic}}、{{title}}、{{requirements}}" },
   { mode: "comment_reply", label: "评论自动回复", help: "可用变量：{{postTitle}}、{{postContent}}、{{thread}}、{{author}}、{{comment}}" },
   { mode: "comment_moderation", label: "评论 AI 审核", help: "可用变量：{{postTitle}}、{{postContent}}、{{author}}、{{content}}" },
+  { mode: "post_comment", label: "发布后 AI 主动首评", help: "可用变量：{{postType}}、{{postTitle}}、{{postContent}}、{{mediaSummary}}；最多附带 6 张图片" },
 ];
 
 export default function AdminAiConfig() {
@@ -41,6 +49,9 @@ export default function AdminAiConfig() {
   const [saved, setSaved] = useState(false);
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<{ success: boolean; message: string; model?: string; latencyMs?: number } | null>(null);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const avatarInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -71,6 +82,10 @@ export default function AdminAiConfig() {
           commentReplyEnabled: config.commentReplyEnabled,
           commentReplyPublishMode: config.commentReplyPublishMode,
           commentContextLimit: Number(config.commentContextLimit),
+          postCommentEnabled: config.postCommentEnabled,
+          postCommentPublishMode: config.postCommentPublishMode,
+          postCommentNickname: config.postCommentNickname,
+          postCommentAvatar: config.postCommentAvatar,
           prompts: config.prompts,
           ...(apiKey.trim() ? { apiKey: apiKey.trim() } : {}),
           ...(clearApiKey ? { clearApiKey: true } : {}),
@@ -86,6 +101,20 @@ export default function AdminAiConfig() {
       alert(err instanceof Error ? err.message : "保存失败");
     } finally {
       setSaving(false);
+    }
+  };
+
+  const uploadAvatar = async (file: File) => {
+    const token = getToken();
+    if (!config || !token) return;
+    setUploadingAvatar(true);
+    try {
+      const url = await uploadImage(file, token);
+      setConfig({ ...config, postCommentAvatar: url });
+    } catch (error) {
+      alert(error instanceof Error ? error.message : "头像上传失败");
+    } finally {
+      setUploadingAvatar(false);
     }
   };
 
@@ -179,6 +208,59 @@ export default function AdminAiConfig() {
           {testResult && <span className={`text-sm ${testResult.success ? "text-green-600" : "text-red-500"}`}>{testResult.message}{testResult.model ? ` · ${testResult.model}` : ""}{testResult.latencyMs ? ` · ${testResult.latencyMs}ms` : ""}</span>}
         </div>
         <p className="mt-2 text-[11px] text-adm-text-tertiary">切换开启状态后，请点击“保存配置”使设置生效。</p>
+      </section>
+
+      <section className="rounded-2xl border border-adm-border bg-adm-card p-5 shadow-sm">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h3 className="flex items-center gap-2 font-semibold text-adm-text"><Bot className="h-4 w-4 text-violet-500" />发布后 AI 主动首评</h3>
+            <p className="mt-1 text-xs text-adm-text-tertiary">动态或文章第一次公开发布后异步生成；跳过广告、草稿和关闭评论的内容。</p>
+          </div>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={config.postCommentEnabled}
+            aria-label={config.postCommentEnabled ? "关闭 AI 主动首评" : "开启 AI 主动首评"}
+            onClick={() => setConfig({ ...config, postCommentEnabled: !config.postCommentEnabled })}
+            className={`relative h-6 w-11 shrink-0 rounded-full transition-colors ${config.postCommentEnabled ? "bg-violet-600" : "bg-black/15 dark:bg-white/20"}`}
+          >
+            <span className={`absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${config.postCommentEnabled ? "translate-x-5" : "translate-x-0"}`} />
+          </button>
+        </div>
+        <div className="mt-5 grid gap-5 md:grid-cols-2">
+          <Field label="首评发布方式">
+            <div className="grid grid-cols-2 gap-2">
+              {([{"value":"draft","label":"先存草稿"},{"value":"published","label":"直接发布"}] as const).map((item) => (
+                <button key={item.value} type="button" onClick={() => setConfig({ ...config, postCommentPublishMode: item.value })} className={`rounded-lg border px-3 py-2 text-sm ${config.postCommentPublishMode === item.value ? "border-violet-500 bg-violet-500/10 text-violet-600 dark:text-violet-400" : "border-adm-border text-adm-text-secondary"}`}>{item.label}</button>
+              ))}
+            </div>
+          </Field>
+          <Field label="AI 昵称">
+            <input value={config.postCommentNickname} maxLength={100} onChange={(event) => setConfig({ ...config, postCommentNickname: event.target.value })} className="ai-admin-input" placeholder="AI 助手" />
+          </Field>
+          <div className="md:col-span-2">
+            <span className="mb-1 block text-xs font-medium text-adm-text-secondary">AI 头像</span>
+            <div className="flex items-center gap-4">
+              <img
+                src={config.postCommentAvatar ? resolveAvatar(config.postCommentAvatar, config.postCommentNickname, 96) : actorAvatarUrl("", config.postCommentNickname || "AI 助手", 96)}
+                alt="AI 头像预览"
+                className="h-16 w-16 shrink-0 rounded-lg bg-adm-input object-cover"
+              />
+              <div className="min-w-0 flex-1 space-y-2">
+                <input value={config.postCommentAvatar} onChange={(event) => setConfig({ ...config, postCommentAvatar: event.target.value })} className="ai-admin-input" placeholder="留空时按昵称生成默认头像" />
+                <div className="flex flex-wrap gap-2">
+                  <button type="button" disabled={uploadingAvatar} onClick={() => avatarInputRef.current?.click()} className="flex items-center gap-1.5 rounded-lg border border-adm-border px-3 py-1.5 text-xs text-adm-text-secondary disabled:opacity-50"><Upload className="h-3.5 w-3.5" />{uploadingAvatar ? "上传中" : "上传图片"}</button>
+                  <button type="button" onClick={() => setPickerOpen(true)} className="flex items-center gap-1.5 rounded-lg border border-adm-border px-3 py-1.5 text-xs text-adm-text-secondary"><Library className="h-3.5 w-3.5" />媒体库</button>
+                  {config.postCommentAvatar && <button type="button" onClick={() => setConfig({ ...config, postCommentAvatar: "" })} className="flex items-center gap-1.5 rounded-lg border border-adm-border px-3 py-1.5 text-xs text-red-500"><Trash2 className="h-3.5 w-3.5" />清除</button>}
+                </div>
+                <input ref={avatarInputRef} type="file" accept="image/*" className="hidden" onChange={(event) => { const file = event.target.files?.[0]; if (file) void uploadAvatar(file); event.target.value = ""; }} />
+              </div>
+            </div>
+          </div>
+        </div>
+        {!config.enabled && config.postCommentEnabled && <p className="mt-3 text-xs text-amber-600 dark:text-amber-400">全局 AI 功能尚未开启，主动首评不会执行。</p>}
+        <p className="mt-3 text-[11px] text-adm-text-tertiary">复用当前模型并最多发送 6 张公开图片；模型不支持视觉时自动降级为文字和媒体摘要。</p>
+        <MediaPicker open={pickerOpen} onClose={() => setPickerOpen(false)} category="image" title="选择 AI 头像" onSelect={(item) => setConfig({ ...config, postCommentAvatar: item.url })} />
       </section>
 
       <section className="rounded-2xl border border-adm-border bg-adm-card p-5 shadow-sm">

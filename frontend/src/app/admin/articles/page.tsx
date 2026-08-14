@@ -10,6 +10,8 @@ import {
   ExternalLink,
   Pin,
   PinOff,
+  Bot,
+  RefreshCw,
 } from "lucide-react";
 import { apiFetch } from "@/lib/api-fetch";
 import { toAbsoluteUrl } from "@/lib/upload";
@@ -32,6 +34,14 @@ interface ArticleListItem {
   status: "published" | "draft";
   createdAt: string;
   author: string;
+  aiCommentJob?: {
+    status: "queued" | "running" | "succeeded" | "failed" | "skipped";
+    attempts: number;
+    lastError: string;
+    fallbackReason: string;
+    publishMode: "draft" | "published";
+    resultCommentId?: string | null;
+  } | null;
 }
 
 const ARTICLE_TYPE_BADGE: Record<string, { label: string; cls: string }> = {
@@ -40,11 +50,21 @@ const ARTICLE_TYPE_BADGE: Record<string, { label: string; cls: string }> = {
   ai: { label: "AI", cls: "bg-purple-50 text-purple-600 dark:bg-purple-500/15 dark:text-purple-400" },
 };
 
+function formatAiJob(job: NonNullable<ArticleListItem["aiCommentJob"]>): string {
+  if (job.status === "queued") return "首评排队中";
+  if (job.status === "running") return "首评生成中";
+  if (job.status === "failed") return "首评失败";
+  if (job.status === "skipped") return "首评已跳过";
+  if (job.fallbackReason) return job.publishMode === "draft" ? "首评草稿（已降级）" : "首评已发布（已降级）";
+  return job.publishMode === "draft" ? "首评草稿" : "首评已发布";
+}
+
 export default function AdminArticlesPage() {
   const [articles, setArticles] = useState<ArticleListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [deleting, setDeleting] = useState<string | null>(null);
   const [pinning, setPinning] = useState<string | null>(null);
+  const [retryingAi, setRetryingAi] = useState<string | null>(null);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const defaultCover = useSiteSettings((s) => s.defaultCover);
@@ -109,6 +129,20 @@ export default function AdminArticlesPage() {
     },
     [],
   );
+
+  const retryAiComment = useCallback(async (id: string) => {
+    setRetryingAi(id);
+    try {
+      const res = await apiFetch(`/admin/posts/${id}/ai-comment-retry`, { method: "POST" });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.message || "重试失败");
+      await fetchArticles(page);
+    } catch (error) {
+      alert(error instanceof Error ? error.message : "重试失败");
+    } finally {
+      setRetryingAi(null);
+    }
+  }, [fetchArticles, page]);
 
   return (
     <div className="mx-auto max-w-5xl py-1 sm:px-4 sm:py-6">
@@ -211,6 +245,13 @@ export default function AdminArticlesPage() {
                           <span className="whitespace-nowrap">
                             {formatArticleTime(article.createdAt)}
                           </span>
+                          {article.aiCommentJob && (
+                            <span className="flex min-w-0 items-center gap-1 text-violet-500" title={article.aiCommentJob.lastError || article.aiCommentJob.fallbackReason || "AI 首评"}>
+                              {article.aiCommentJob.status === "queued" || article.aiCommentJob.status === "running" ? <Loader2 className="h-3 w-3 shrink-0 animate-spin" /> : <Bot className="h-3 w-3 shrink-0" />}
+                              <span className="max-w-40 truncate">{formatAiJob(article.aiCommentJob)}</span>
+                              {["failed", "skipped"].includes(article.aiCommentJob.status) && <button type="button" disabled={retryingAi === article.id} onClick={(event) => { event.preventDefault(); void retryAiComment(article.id); }} className="rounded p-0.5 hover:bg-violet-500/10"><RefreshCw className={`h-3 w-3 ${retryingAi === article.id ? "animate-spin" : ""}`} /></button>}
+                            </span>
+                          )}
                         </div>
                       </div>
 

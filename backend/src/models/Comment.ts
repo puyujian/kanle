@@ -7,6 +7,7 @@ interface CommentAttributes {
   postId: string;
   authorName: string;
   email: string;
+  avatar?: string | null;
   website?: string;
   replyTo?: string;
   replyToEmail?: string;
@@ -23,7 +24,7 @@ interface CommentAttributes {
 }
 
 interface CommentCreationAttributes
-  extends Optional<CommentAttributes, "id" | "replyTo" | "replyToEmail" | "replyToId" | "website" | "ip" | "region" | "status" | "source" | "reviewMethod" | "reviewReason" | "reviewedAt" | "reviewedById"> {}
+  extends Optional<CommentAttributes, "id" | "avatar" | "replyTo" | "replyToEmail" | "replyToId" | "website" | "ip" | "region" | "status" | "source" | "reviewMethod" | "reviewReason" | "reviewedAt" | "reviewedById"> {}
 
 class Comment
   extends Model<CommentAttributes, CommentCreationAttributes>
@@ -33,6 +34,7 @@ class Comment
   declare postId: string;
   declare authorName: string;
   declare email: string;
+  declare avatar?: string | null;
   declare website?: string;
   declare replyTo?: string;
   declare replyToEmail?: string;
@@ -76,6 +78,10 @@ Comment.init(
       type: DataTypes.STRING(255),
       allowNull: false,
       defaultValue: "",
+    },
+    avatar: {
+      type: DataTypes.STRING(512),
+      allowNull: true,
     },
     website: {
       type: DataTypes.STRING(255),

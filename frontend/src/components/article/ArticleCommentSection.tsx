@@ -3,7 +3,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, useCallback, useMemo } from "react";
 import { flushSync } from "react-dom";
 import { Comment, Post, formatRelativeTime } from "@/lib/mock-data";
-import { cravatarUrl } from "@/lib/avatar";
+import { cravatarUrl, resolveAvatar } from "@/lib/avatar";
 import { findRootCommentId } from "@/lib/comment-utils";
 import { getCurrentUser, CurrentUser } from "@/lib/auth";
 import { EMOJI_LIST, editableToShortcode, renderTextWithEmoji } from "@/lib/emoji";
@@ -996,7 +996,7 @@ export default function ArticleCommentSection({
               <div key={parent.id} id={`comment-${parent.id}`} className="flex gap-3 scroll-mt-20">
                 { }
                 <img
-                  src={cravatarUrl(parent.email || parent.author, 80)}
+                  src={parent.avatar ? resolveAvatar(parent.avatar, parent.email || parent.author, 80) : cravatarUrl(parent.email || parent.author, 80)}
                   alt={parent.author}
                   className="h-10 w-10 shrink-0 rounded-lg object-cover"
                 />
@@ -1092,7 +1092,7 @@ export default function ArticleCommentSection({
                             <div key={reply.id} id={`comment-${reply.id}`} className="flex gap-2 scroll-mt-20">
                               { }
                               <img
-                                src={cravatarUrl(reply.email || reply.author, 80)}
+                                src={reply.avatar ? resolveAvatar(reply.avatar, reply.email || reply.author, 80) : cravatarUrl(reply.email || reply.author, 80)}
                                 alt={reply.author}
                                 className="h-8 w-8 shrink-0 rounded-md object-cover"
                               />

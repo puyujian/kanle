@@ -6,6 +6,7 @@ import {
   DEFAULT_AI_PROMPTS,
   DEFAULT_COMMENT_MODERATION_PROMPT,
   DEFAULT_COMMENT_REPLY_PROMPT,
+  DEFAULT_POST_COMMENT_PROMPT,
   AiMode,
   ensureAiSetting,
   normalizeBaseUrl,
@@ -35,6 +36,10 @@ function publicConfig(setting: Awaited<ReturnType<typeof ensureAiSetting>>) {
     commentReplyEnabled: setting.commentReplyEnabled,
     commentReplyPublishMode: setting.commentReplyPublishMode || "draft",
     commentContextLimit: setting.commentContextLimit || 10,
+    postCommentEnabled: setting.postCommentEnabled,
+    postCommentPublishMode: setting.postCommentPublishMode || "draft",
+    postCommentNickname: setting.postCommentNickname || "AI 助手",
+    postCommentAvatar: setting.postCommentAvatar || "",
     apiKeyConfigured: !!setting.apiKeyEncrypted,
     apiKeyMasked: maskApiKey(setting.apiKeyEncrypted),
     encryptionReady: isAiEncryptionReady(),
@@ -46,11 +51,13 @@ function publicConfig(setting: Awaited<ReturnType<typeof ensureAiSetting>>) {
       article_full: setting.articleFullPrompt || DEFAULT_AI_PROMPTS.article_full,
       comment_reply: setting.commentReplyPrompt || DEFAULT_COMMENT_REPLY_PROMPT,
       comment_moderation: setting.commentModerationPrompt || DEFAULT_COMMENT_MODERATION_PROMPT,
+      post_comment: setting.postCommentPrompt || DEFAULT_POST_COMMENT_PROMPT,
     },
     defaultPrompts: {
       ...DEFAULT_AI_PROMPTS,
       comment_reply: DEFAULT_COMMENT_REPLY_PROMPT,
       comment_moderation: DEFAULT_COMMENT_MODERATION_PROMPT,
+      post_comment: DEFAULT_POST_COMMENT_PROMPT,
     },
   };
 }
@@ -88,6 +95,10 @@ router.put(
     body("commentReplyEnabled").optional().isBoolean(),
     body("commentReplyPublishMode").optional().isIn(["draft", "published"]),
     body("commentContextLimit").optional().isInt({ min: 1, max: 20 }),
+    body("postCommentEnabled").optional().isBoolean(),
+    body("postCommentPublishMode").optional().isIn(["draft", "published"]),
+    body("postCommentNickname").optional().trim().isLength({ min: 1, max: 100 }),
+    body("postCommentAvatar").optional().trim().isLength({ max: 512 }),
     body("prompts").optional().isObject(),
   ],
   async (req: AuthRequest, res: Response) => {
@@ -106,7 +117,7 @@ router.put(
           return;
         }
       }
-      for (const mode of ["comment_reply", "comment_moderation"] as const) {
+      for (const mode of ["comment_reply", "comment_moderation", "post_comment"] as const) {
         if (prompts[mode] !== undefined && (typeof prompts[mode] !== "string" || prompts[mode].length > 20000)) {
           res.status(400).json({ message: "提示词必须是 20000 字以内的文本" });
           return;
@@ -133,6 +144,10 @@ router.put(
         commentReplyEnabled: req.body.commentReplyEnabled ?? setting.commentReplyEnabled,
         commentReplyPublishMode: req.body.commentReplyPublishMode ?? setting.commentReplyPublishMode,
         commentContextLimit: req.body.commentContextLimit ?? setting.commentContextLimit,
+        postCommentEnabled: req.body.postCommentEnabled ?? setting.postCommentEnabled,
+        postCommentPublishMode: req.body.postCommentPublishMode ?? setting.postCommentPublishMode,
+        postCommentNickname: req.body.postCommentNickname ?? setting.postCommentNickname,
+        postCommentAvatar: req.body.postCommentAvatar ?? setting.postCommentAvatar,
         momentPolishPrompt: prompts.moment_polish ?? setting.momentPolishPrompt,
         articleOutlinePrompt: prompts.article_outline ?? setting.articleOutlinePrompt,
         articleContinuePrompt: prompts.article_continue ?? setting.articleContinuePrompt,
@@ -140,6 +155,7 @@ router.put(
         articleFullPrompt: prompts.article_full ?? setting.articleFullPrompt,
         commentReplyPrompt: prompts.comment_reply ?? setting.commentReplyPrompt,
         commentModerationPrompt: prompts.comment_moderation ?? setting.commentModerationPrompt,
+        postCommentPrompt: prompts.post_comment ?? setting.postCommentPrompt,
       });
       res.json(publicConfig(setting));
     } catch (error) {

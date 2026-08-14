@@ -3,10 +3,10 @@ import bcrypt from "bcryptjs";
 import { body, param, validationResult } from "express-validator";
 import { Op } from "sequelize";
 import sequelize from "../config/database";
-import { User, Post, Comment, CommentLike, CommentAiJob, Like, SiteSetting, AiSetting } from "../models";
+import { User, Post, Comment, CommentLike, CommentAiJob, PostAiCommentJob, Like, SiteSetting, AiSetting } from "../models";
 import { authenticate, requireAdmin, AuthRequest } from "../middleware/auth";
 import { blacklistService } from "../services/blacklist-service";
-import { publishComment, retryCommentAiJob } from "../services/comment-ai-service";
+import { publishComment, retryCommentAiJob, retryPostAiCommentJob } from "../services/comment-ai-service";
 import { triggerRevalidate } from "../utils/revalidate";
 import { decryptAiSecret, isAiEncryptionReady } from "../utils/ai-crypto";
 
@@ -121,7 +121,10 @@ router.get("/posts", authenticate, requireAdmin, async (req: AuthRequest, res: R
 
   const { count, rows: posts } = await Post.findAndCountAll({
     where,
-    include: [{ model: User, as: "author", attributes: ["id", "nickname", "avatar"] }],
+    include: [
+      { model: User, as: "author", attributes: ["id", "nickname", "avatar"] },
+      { model: PostAiCommentJob, as: "aiCommentJob", required: false },
+    ],
     order: [["pinned", "DESC"], ["createdAt", "DESC"]],
     limit,
     offset,
@@ -145,6 +148,14 @@ router.get("/posts", authenticate, requireAdmin, async (req: AuthRequest, res: R
       status: p.status || "published",
       createdAt: p.createdAt,
       author: p.author?.nickname || "",
+      aiCommentJob: p.aiCommentJob ? {
+        status: p.aiCommentJob.status,
+        attempts: p.aiCommentJob.attempts,
+        lastError: p.aiCommentJob.lastError || "",
+        fallbackReason: p.aiCommentJob.fallbackReason || "",
+        publishMode: p.aiCommentJob.publishMode,
+        resultCommentId: p.aiCommentJob.resultCommentId || null,
+      } : null,
     })),
     pagination: { page, limit, total: count, totalPages: Math.ceil(count / limit) },
   });
@@ -286,6 +297,7 @@ router.get("/comments", authenticate, requireAdmin, async (_req: AuthRequest, re
       id: c.id,
       author: c.authorName,
       email: c.email,
+      avatar: c.avatar || "",
       website: c.website,
       content: c.content,
       replyTo: c.replyTo,
@@ -335,6 +347,10 @@ async function deleteCommentTrees(ids: string[]): Promise<number> {
   const targetIds = [...targets];
   const hadPublished = all.some((item) => targets.has(item.id) && item.status === "published");
   await sequelize.transaction(async (transaction) => {
+    await PostAiCommentJob.update(
+      { resultCommentId: null, status: "skipped", lastError: "生成的评论已删除" },
+      { where: { resultCommentId: { [Op.in]: targetIds } }, transaction }
+    );
     await CommentLike.destroy({ where: { commentId: { [Op.in]: targetIds } }, transaction });
     await CommentAiJob.destroy({
       where: { [Op.or]: [{ commentId: { [Op.in]: targetIds } }, { resultCommentId: { [Op.in]: targetIds } }] },
@@ -369,7 +385,7 @@ router.put(
   [
     param("id").isUUID(),
     body("author").trim().isLength({ min: 1, max: 100 }),
-    body("email").trim().isEmail().normalizeEmail(),
+    body("email").optional({ checkFalsy: true }).trim().isEmail().normalizeEmail(),
     body("website").optional({ nullable: true }).trim().isLength({ max: 255 }),
     body("content").trim().isLength({ min: 1, max: 5000 }),
   ],
@@ -380,7 +396,7 @@ router.put(
     if (!comment) { res.status(404).json({ message: "评论不存在" }); return; }
     await comment.update({
       authorName: req.body.author,
-      email: req.body.email,
+      email: req.body.email || "",
       website: req.body.website || null,
       content: req.body.content,
     });
@@ -485,6 +501,38 @@ router.get("/blacklist", authenticate, requireAdmin, async (_req: AuthRequest, r
     }))
   );
 });
+
+router.get("/post-ai-comments", authenticate, requireAdmin, async (_req: AuthRequest, res: Response) => {
+  const jobs = await PostAiCommentJob.findAll({ order: [["createdAt", "DESC"]] });
+  res.json({
+    data: jobs.map((job) => ({
+      postId: job.postId,
+      status: job.status,
+      attempts: job.attempts,
+      lastError: job.lastError || "",
+      fallbackReason: job.fallbackReason || "",
+      publishMode: job.publishMode,
+      resultCommentId: job.resultCommentId || null,
+    })),
+  });
+});
+
+router.post(
+  "/posts/:id/ai-comment-retry",
+  authenticate,
+  requireAdmin,
+  [param("id").isUUID()],
+  async (req: AuthRequest, res: Response) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) { res.status(400).json({ errors: errors.array() }); return; }
+    try {
+      const job = await retryPostAiCommentJob(req.params.id as string);
+      res.json({ postId: job.postId, status: job.status });
+    } catch (error) {
+      res.status(409).json({ message: (error as Error).message });
+    }
+  }
+);
 
 // GET /api/admin/blacklist/status - 获取评论防刷总开关状态
 router.get("/blacklist/status", authenticate, requireAdmin, async (_req: AuthRequest, res: Response) => {

@@ -9,12 +9,23 @@ import {
   Heart,
   MessageSquare,
   Loader2,
+  Bot,
+  RefreshCw,
 } from "lucide-react";
 import { apiFetch, getToken } from "@/lib/api-fetch";
 import { Post } from "@/lib/mock-data";
 import PostCard from "@/components/PostCard";
 import { PostCardSkeleton } from "@/components/Skeleton";
 import { useSiteSettings } from "@/lib/site-settings-store";
+
+function formatAiJob(job: NonNullable<Post["aiCommentJob"]>): string {
+  if (job.status === "queued") return "AI 首评排队中";
+  if (job.status === "running") return "AI 首评生成中";
+  if (job.status === "failed") return `AI 首评失败${job.lastError ? `：${job.lastError}` : ""}`;
+  if (job.status === "skipped") return `AI 首评已跳过${job.lastError ? `：${job.lastError}` : ""}`;
+  if (job.fallbackReason) return `AI 首评已${job.publishMode === "draft" ? "存为草稿" : "发布"}（视觉已降级）`;
+  return job.publishMode === "draft" ? "AI 首评草稿已生成" : "AI 首评已发布";
+}
 
 export default function AdminPosts() {
   const router = useRouter();
@@ -23,6 +34,8 @@ export default function AdminPosts() {
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [pinningId, setPinningId] = useState<string | null>(null);
   const [permId, setPermId] = useState<string | null>(null);
+  const [aiJobs, setAiJobs] = useState<Record<string, NonNullable<Post["aiCommentJob"]>>>({});
+  const [retryingAiId, setRetryingAiId] = useState<string | null>(null);
 
   const token = getToken();
   const fetchSettings = useSiteSettings((s) => s.fetchSettings);
@@ -37,6 +50,24 @@ export default function AdminPosts() {
       })
       .catch(() => setPosts([]))
       .finally(() => setLoading(false));
+    apiFetch("/admin/post-ai-comments")
+      .then((res) => res.json())
+      .then((data) => setAiJobs(Object.fromEntries((data.data || []).map((job: NonNullable<Post["aiCommentJob"]> & { postId: string }) => [job.postId, job]))))
+      .catch(() => setAiJobs({}));
+  };
+
+  const retryAiComment = async (postId: string) => {
+    setRetryingAiId(postId);
+    try {
+      const res = await apiFetch(`/admin/posts/${postId}/ai-comment-retry`, { method: "POST" });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.message || "重试失败");
+      fetchPosts();
+    } catch (error) {
+      alert(error instanceof Error ? error.message : "重试失败");
+    } finally {
+      setRetryingAiId(null);
+    }
   };
 
   useEffect(() => {
@@ -163,6 +194,9 @@ export default function AdminPosts() {
                 onDelete={handleDelete}
                 onPin={handlePin}
                 onTogglePerm={handleTogglePermission}
+                aiJob={aiJobs[post.id] || null}
+                retryingAi={retryingAiId === post.id}
+                onRetryAi={retryAiComment}
               />
             </div>
           ))}
@@ -181,6 +215,9 @@ function ActionBar({
   onDelete,
   onPin,
   onTogglePerm,
+  aiJob,
+  retryingAi,
+  onRetryAi,
 }: {
   post: Post;
   permId: string | null;
@@ -193,6 +230,9 @@ function ActionBar({
     field: "likesDisabled" | "commentsDisabled",
     current: boolean,
   ) => void;
+  aiJob: Post["aiCommentJob"];
+  retryingAi: boolean;
+  onRetryAi: (id: string) => void;
 }) {
   const permissionBusy = permId?.startsWith(`${post.id}:`) ?? false;
   const likeBusy = permId === `${post.id}:likesDisabled`;
@@ -204,6 +244,13 @@ function ActionBar({
 
   return (
     <div className="grid grid-cols-2 gap-1.5 border-t border-adm-border bg-adm-card-hover/40 p-2 sm:flex sm:flex-wrap sm:items-center sm:justify-end sm:gap-2 sm:px-4 sm:py-2.5">
+      {aiJob && (
+        <div className="col-span-2 flex min-w-0 items-center gap-1.5 text-xs text-adm-text-tertiary sm:mr-auto">
+          {aiJob.status === "running" || aiJob.status === "queued" ? <Loader2 className="h-3.5 w-3.5 animate-spin text-violet-500" /> : <Bot className="h-3.5 w-3.5 text-violet-500" />}
+          <span className="truncate">{formatAiJob(aiJob)}</span>
+          {["failed", "skipped"].includes(aiJob.status) && <button type="button" disabled={retryingAi} onClick={() => onRetryAi(post.id)} title={aiJob.lastError || "重试 AI 首评"} className="ml-1 rounded p-1 text-violet-500 hover:bg-violet-500/10 disabled:opacity-50"><RefreshCw className={`h-3.5 w-3.5 ${retryingAi ? "animate-spin" : ""}`} /></button>}
+        </div>
+      )}
       <button
         type="button"
         onClick={() => onTogglePerm(post.id, "likesDisabled", !!post.likesDisabled)}

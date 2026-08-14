@@ -32,6 +32,7 @@ interface AdminComment {
   id: string;
   author: string;
   email: string;
+  avatar?: string;
   website?: string;
   content: string;
   replyTo?: string;
@@ -168,7 +169,7 @@ export default function AdminComments() {
   };
 
   const saveEdit = async () => {
-    if (!editingId || !editForm.author.trim() || !editForm.email.trim() || !editForm.content.trim()) return;
+    if (!editingId || !editForm.author.trim() || !editForm.content.trim()) return;
     setBusy(true);
     try {
       const res = await apiFetch(`/admin/comments/${editingId}`, {

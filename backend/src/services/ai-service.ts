@@ -27,6 +27,9 @@ export const DEFAULT_COMMENT_REPLY_PROMPT =
 export const DEFAULT_COMMENT_MODERATION_PROMPT =
   "审核下面的博客评论。明显正常友善的内容选择 approve；明显包含垃圾广告、辱骂骚扰、违法危险内容或恶意灌水的选择 reject；语义不清、需要结合事实判断或你不确定时选择 manual。只返回 JSON：{\"decision\":\"approve|reject|manual\",\"reason\":\"简短中文原因\"}。\n\n原文标题：{{postTitle}}\n原文：{{postContent}}\n评论者：{{author}}\n评论：{{content}}";
 
+export const DEFAULT_POST_COMMENT_PROMPT =
+  "请作为独立的 AI 助手，为下面刚发布的内容写一条自然、有内容、友好的中文顶级评论。结合提供的文字、媒体摘要和图片；无法确认的细节不要猜测，不要声称看过未提供的视频或听过音频。不要自称博主，也不用刻意重复你是 AI。只输出 1 至 3 句纯文本，不使用 Markdown 标题，不解释生成过程，最多 500 字。\n\n内容类型：{{postType}}\n标题：{{postTitle}}\n正文：{{postContent}}\n媒体摘要：{{mediaSummary}}";
+
 export async function ensureAiSetting(): Promise<AiSetting> {
   const [setting] = await AiSetting.findOrCreate({ where: { id: 1 }, defaults: { id: 1 } });
   return setting;
@@ -80,6 +83,10 @@ function safeUpstreamMessage(status: number): string {
   return `AI 服务请求失败（${status}）`;
 }
 
+function upstreamError(status: number): Error & { upstreamStatus: number } {
+  return Object.assign(new Error(safeUpstreamMessage(status)), { upstreamStatus: status });
+}
+
 function getTextContent(data: any): string {
   const content = data?.choices?.[0]?.message?.content ?? data?.choices?.[0]?.delta?.content;
   if (typeof content === "string") return content;
@@ -95,8 +102,13 @@ async function getRuntimeConfig(requireEnabled = true) {
   return { setting, apiKey: decryptAiSecret(setting.apiKeyEncrypted) };
 }
 
+export type AiMessageContent = string | Array<
+  | { type: "text"; text: string }
+  | { type: "image_url"; image_url: { url: string; detail?: "low" | "high" | "auto" } }
+>;
+
 export async function requestAiText(args: {
-  messages: Array<{ role: "system" | "user" | "assistant"; content: string }>;
+  messages: Array<{ role: "system" | "user" | "assistant"; content: AiMessageContent }>;
   temperature?: number;
   maxTokens?: number;
   timeoutMs?: number;
@@ -118,7 +130,7 @@ export async function requestAiText(args: {
       }),
       signal: controller.signal,
     });
-    if (!response.ok) throw new Error(safeUpstreamMessage(response.status));
+    if (!response.ok) throw upstreamError(response.status);
     const data: any = await response.json();
     const text = getTextContent(data).trim();
     if (!text) throw new Error("AI 服务未返回文本内容");

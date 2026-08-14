@@ -11,6 +11,8 @@ export interface Comment {
   id: string;
   author: string;
   email?: string;
+  avatar?: string;
+  source?: "visitor" | "admin" | "ai";
   website?: string;
   replyTo?: string;
   /** 被回复评论的 ID（新数据有值，旧数据为空 — 需 fallback 到 replyTo author name 查找） */
@@ -151,6 +153,14 @@ export interface Post {
   meLiked?: boolean;
   /** 阅读量（文章详情页客户端 fetch ?view=1 时递增） */
   viewCount?: number;
+  aiCommentJob?: {
+    status: "queued" | "running" | "succeeded" | "failed" | "skipped";
+    attempts: number;
+    lastError: string;
+    fallbackReason: string;
+    publishMode: "draft" | "published";
+    resultCommentId?: string | null;
+  } | null;
 }
 
 // Cravatar avatar URL. Each nickname gets a stable MD5 hash so Cravatar returns

@@ -9,7 +9,7 @@ import { generateShortId } from "../utils/short-id";
 import { triggerRevalidate } from "../utils/revalidate";
 import { checkCommentRate, recordCommentSuccess, resetViolations } from "../middleware/rateLimit";
 import { blacklistService } from "../services/blacklist-service";
-import { enqueueCommentAiJob, publishComment } from "../services/comment-ai-service";
+import { enqueueCommentAiJob, enqueuePostAiCommentJob, publishComment } from "../services/comment-ai-service";
 import { parseVideoFromUrl, ParseError } from "./video-parse";
 
 const router = Router();
@@ -178,6 +178,8 @@ function formatPost(
           id: c.id,
           author: c.authorName,
           email: c.email,
+          avatar: c.avatar || "",
+          source: c.source || "visitor",
           website: c.website,
           replyTo: c.replyTo,
           replyToEmail: c.replyToEmail,
@@ -473,6 +475,9 @@ router.post(
 
     // 触发首页 ISR 重生成，确保刷新页面立即可见最新动态
     triggerRevalidate();
+    if (post!.status === "published") {
+      enqueuePostAiCommentJob(post!.id).catch((error) => console.error("[post-ai] enqueue failed:", error));
+    }
 
     res.status(201).json(formatPost(full));
   }
@@ -526,6 +531,7 @@ router.put(
         ? (post.isAd ? false : incomingPinned)
         : post.pinned;
 
+    const wasPublished = post.status === "published";
     await post.update({
       type: req.body.type !== undefined ? req.body.type : post.type,
       title: req.body.title !== undefined ? req.body.title : post.title,
@@ -551,6 +557,9 @@ router.put(
 
     // 触发首页 ISR 重生成，确保刷新页面看到最新动态
     triggerRevalidate();
+    if (!wasPublished && post.status === "published") {
+      enqueuePostAiCommentJob(post.id).catch((error) => console.error("[post-ai] enqueue failed:", error));
+    }
 
     res.json(formatPost(post));
   }
@@ -811,6 +820,8 @@ router.post(
       id: comment.id,
       author: comment.authorName,
       email: comment.email,
+      avatar: comment.avatar || "",
+      source: comment.source,
       website: comment.website,
       replyTo: comment.replyTo,
       replyToEmail: comment.replyToEmail,

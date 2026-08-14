@@ -104,3 +104,42 @@ test("comment thread context keeps root and target, follows nested replies, and 
   assert.doesNotMatch(thread, /另一个线程/);
   assert.equal(thread.split("\n").length, 3);
 });
+
+test("post AI image URLs require public HTTP origins", () => {
+  assert.equal(commentAiInternals.publicImageUrl("/uploads/a.jpg", "https://example.com"), "https://example.com/uploads/a.jpg");
+  assert.equal(commentAiInternals.publicImageUrl("/uploads/a.jpg", "example.com"), "https://example.com/uploads/a.jpg");
+  assert.equal(commentAiInternals.publicImageUrl("https://cdn.example.com/a.jpg", ""), "https://cdn.example.com/a.jpg");
+  assert.equal(commentAiInternals.publicImageUrl("http://127.0.0.1/a.jpg", ""), "");
+  assert.equal(commentAiInternals.publicImageUrl("http://192.168.1.2/a.jpg", ""), "");
+  assert.equal(commentAiInternals.publicImageUrl("file:///tmp/a.jpg", ""), "");
+});
+
+test("post media collection deduplicates and caps visual inputs", () => {
+  const post = {
+    content: '<p>正文</p><img src="https://img.example.com/1.jpg"><img src="https://img.example.com/2.jpg">',
+    images: [
+      "https://img.example.com/1.jpg",
+      "https://img.example.com/3.jpg",
+      "https://img.example.com/4.jpg",
+      "https://img.example.com/5.jpg",
+      "https://img.example.com/6.jpg",
+      "https://img.example.com/7.jpg",
+    ],
+    cover: "https://img.example.com/8.jpg",
+    video: { title: "视频标题", cover: "https://img.example.com/9.jpg" },
+    music: { name: "歌曲", artist: "歌手", cover: "https://img.example.com/10.jpg" },
+  } as any;
+  const media = commentAiInternals.collectPostMedia(post, "https://example.com");
+  assert.equal(media.images.length, 6);
+  assert.equal(new Set(media.images).size, 6);
+  assert.match(media.text, /视频标题/);
+  assert.match(media.text, /歌曲/);
+});
+
+test("vision fallback only accepts compatibility statuses", () => {
+  assert.equal(commentAiInternals.isVisionCompatibilityError({ upstreamStatus: 400 }), true);
+  assert.equal(commentAiInternals.isVisionCompatibilityError({ upstreamStatus: 422 }), true);
+  assert.equal(commentAiInternals.isVisionCompatibilityError({ upstreamStatus: 404 }), false);
+  assert.equal(commentAiInternals.isVisionCompatibilityError({ upstreamStatus: 401 }), false);
+  assert.equal(commentAiInternals.isVisionCompatibilityError(new Error("timeout")), false);
+});

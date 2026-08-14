@@ -19,6 +19,11 @@ export interface AiSettingAttributes {
   commentContextLimit: number;
   commentReplyPrompt: string;
   commentModerationPrompt: string;
+  postCommentEnabled: boolean;
+  postCommentPublishMode: "draft" | "published";
+  postCommentNickname: string;
+  postCommentAvatar: string;
+  postCommentPrompt: string;
 }
 
 type AiSettingCreationAttributes = Optional<AiSettingAttributes, keyof AiSettingAttributes>;
@@ -44,6 +49,11 @@ class AiSetting
   declare commentContextLimit: number;
   declare commentReplyPrompt: string;
   declare commentModerationPrompt: string;
+  declare postCommentEnabled: boolean;
+  declare postCommentPublishMode: "draft" | "published";
+  declare postCommentNickname: string;
+  declare postCommentAvatar: string;
+  declare postCommentPrompt: string;
 }
 
 AiSetting.init(
@@ -65,6 +75,11 @@ AiSetting.init(
     commentContextLimit: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 10 },
     commentReplyPrompt: { type: DataTypes.TEXT, allowNull: false, defaultValue: "" },
     commentModerationPrompt: { type: DataTypes.TEXT, allowNull: false, defaultValue: "" },
+    postCommentEnabled: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
+    postCommentPublishMode: { type: DataTypes.ENUM("draft", "published"), allowNull: false, defaultValue: "draft" },
+    postCommentNickname: { type: DataTypes.STRING(100), allowNull: false, defaultValue: "AI 助手" },
+    postCommentAvatar: { type: DataTypes.STRING(512), allowNull: false, defaultValue: "" },
+    postCommentPrompt: { type: DataTypes.TEXT, allowNull: false, defaultValue: "" },
   },
   { sequelize, tableName: "ai_settings" }
 );
