@@ -8,7 +8,20 @@ import { getGlobalAudio } from "@/lib/global-audio";
 import { getImageUrl } from "@/lib/site-settings-store";
 import LazyImage from "./LazyImage";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000/api";
+const CARD_WIDTH = 80;
+const CARD_HEIGHT = 112;
+const EDGE_GAP = 8;
+const EDGE_SNAP_DISTANCE = 48;
+const COLLAPSED_PEEK = 28;
+
+type DockSide = "left" | "right" | null;
+
+type SavedCardState = {
+  x?: number;
+  y?: number;
+  dockSide?: DockSide;
+  collapsed?: boolean;
+};
 
 function resolveCover(cover: string): string {
   return getImageUrl(cover);
@@ -17,7 +30,7 @@ function resolveCover(cover: string): string {
 /**
  * 全局悬浮音乐卡片：在 layout.tsx 中挂载，跨页面存在。
  * 当 activePostMusic 不为 null 时显示。
- * 支持拖拽（不超出屏幕），位置持久化到 localStorage。
+ * 支持拖拽、靠边半隐藏和点击展开，位置持久化到 localStorage。
  */
 export default function MusicFloatingCard() {
   const activePostMusic = useMusicPlayer((s) => s.activePostMusic);
@@ -25,44 +38,75 @@ export default function MusicFloatingCard() {
   const isLoading = useMusicPlayer((s) => s.isLoading);
   const clear = useMusicPlayer((s) => s.clear);
 
-  const [mounted, setMounted] = useState(false);
   const [cardPos, setCardPos] = useState({ x: 0, y: 0 });
   const [cardReady, setCardReady] = useState(false);
   const [dragging, setDragging] = useState(false);
+  const [dockSide, setDockSide] = useState<DockSide>(null);
+  const [collapsed, setCollapsed] = useState(false);
+  const cardPosRef = useRef(cardPos);
   const dragRef = useRef({ startX: 0, startY: 0, startPosX: 0, startPosY: 0, moved: false, dragging: false });
 
-  useEffect(() => {
-    setMounted(true);
-  }, []);
+  const updateCardPos = (pos: { x: number; y: number }) => {
+    cardPosRef.current = pos;
+    setCardPos(pos);
+  };
+
+  const getDockedX = (side: Exclude<DockSide, null>, isCollapsed: boolean) => {
+    if (isCollapsed) {
+      return side === "left" ? -(CARD_WIDTH - COLLAPSED_PEEK) : window.innerWidth - COLLAPSED_PEEK;
+    }
+    return side === "left" ? EDGE_GAP : window.innerWidth - CARD_WIDTH - EDGE_GAP;
+  };
+
+  const saveCardState = (
+    pos: { x: number; y: number },
+    nextDockSide: DockSide,
+    nextCollapsed: boolean
+  ) => {
+    try {
+      localStorage.setItem(
+        "music_card_pos",
+        JSON.stringify({ ...pos, dockSide: nextDockSide, collapsed: nextCollapsed })
+      );
+    } catch {
+      // ignore
+    }
+  };
 
   // 打开卡片时初始化位置：优先使用上次保存的位置，否则默认左上角
   useEffect(() => {
     if (activePostMusic && !cardReady) {
-      const w = 80;
-      const h = 112;
-      let posX: number;
-      let posY: number;
-      try {
-        const saved = localStorage.getItem("music_card_pos");
-        if (saved) {
-          const parsed = JSON.parse(saved);
-          posX = parsed.x;
-          posY = parsed.y;
-        } else {
-          throw new Error("no saved pos");
+      const frame = window.requestAnimationFrame(() => {
+        let posX: number;
+        let posY: number;
+        let savedDockSide: DockSide = null;
+        let savedCollapsed = false;
+        try {
+          const saved = localStorage.getItem("music_card_pos");
+          if (saved) {
+            const parsed = JSON.parse(saved) as SavedCardState;
+            posX = typeof parsed.x === "number" ? parsed.x : EDGE_GAP;
+            posY = typeof parsed.y === "number" ? parsed.y : EDGE_GAP;
+            savedDockSide = parsed.dockSide === "left" || parsed.dockSide === "right" ? parsed.dockSide : null;
+            savedCollapsed = Boolean(parsed.collapsed && savedDockSide);
+          } else {
+            throw new Error("no saved pos");
+          }
+        } catch {
+          const isDesktop = window.matchMedia("(min-width: 768px)").matches;
+          posX = 16;
+          posY = isDesktop ? 16 : 72;
         }
-      } catch {
-        const isDesktop = window.matchMedia("(min-width: 768px)").matches;
-        posX = 16;
-        posY = isDesktop ? 16 : 72;
-      }
-      const clampedX = Math.max(8, Math.min(window.innerWidth - w - 8, posX));
-      const clampedY = Math.max(8, Math.min(window.innerHeight - h - 8, posY));
-      setCardPos({ x: clampedX, y: clampedY });
-      setCardReady(true);
-    }
-    if (!activePostMusic) {
-      setCardReady(false);
+        const clampedY = Math.max(EDGE_GAP, Math.min(window.innerHeight - CARD_HEIGHT - EDGE_GAP, posY));
+        const clampedX = savedDockSide
+          ? getDockedX(savedDockSide, savedCollapsed)
+          : Math.max(EDGE_GAP, Math.min(window.innerWidth - CARD_WIDTH - EDGE_GAP, posX));
+        updateCardPos({ x: clampedX, y: clampedY });
+        setDockSide(savedDockSide);
+        setCollapsed(savedCollapsed);
+        setCardReady(true);
+      });
+      return () => window.cancelAnimationFrame(frame);
     }
   }, [activePostMusic, cardReady]);
 
@@ -70,16 +114,19 @@ export default function MusicFloatingCard() {
   useEffect(() => {
     if (!activePostMusic || !cardReady) return;
     const handleResize = () => {
-      const w = 80;
-      const h = 112;
-      setCardPos((prev) => ({
-        x: Math.max(8, Math.min(window.innerWidth - w - 8, prev.x)),
-        y: Math.max(8, Math.min(window.innerHeight - h - 8, prev.y)),
-      }));
+      const prev = cardPosRef.current;
+      const nextPos = {
+        x: dockSide
+          ? getDockedX(dockSide, collapsed)
+          : Math.max(EDGE_GAP, Math.min(window.innerWidth - CARD_WIDTH - EDGE_GAP, prev.x)),
+        y: Math.max(EDGE_GAP, Math.min(window.innerHeight - CARD_HEIGHT - EDGE_GAP, prev.y)),
+      };
+      updateCardPos(nextPos);
+      saveCardState(nextPos, dockSide, collapsed);
     };
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
-  }, [activePostMusic, cardReady]);
+  }, [activePostMusic, cardReady, collapsed, dockSide]);
 
   const onPointerDown = (e: React.PointerEvent) => {
     dragRef.current = {
@@ -105,25 +152,52 @@ export default function MusicFloatingCard() {
     if (Math.abs(dx) > 3 || Math.abs(dy) > 3) {
       dragRef.current.moved = true;
     }
+    if (!dragRef.current.moved) return;
+    if (collapsed || dockSide) {
+      setCollapsed(false);
+      setDockSide(null);
+    }
     const newX = dragRef.current.startPosX + dx;
     const newY = dragRef.current.startPosY + dy;
-    const w = 80;
-    const h = 112;
-    const clampedX = Math.max(8, Math.min(window.innerWidth - w - 8, newX));
-    const clampedY = Math.max(8, Math.min(window.innerHeight - h - 8, newY));
-    setCardPos({ x: clampedX, y: clampedY });
+    const clampedX = Math.max(0, Math.min(window.innerWidth - CARD_WIDTH, newX));
+    const clampedY = Math.max(EDGE_GAP, Math.min(window.innerHeight - CARD_HEIGHT - EDGE_GAP, newY));
+    updateCardPos({ x: clampedX, y: clampedY });
   };
 
-  const onPointerUp = (e: React.PointerEvent) => {
+  const onPointerUp = () => {
     dragRef.current.dragging = false;
     setDragging(false);
-    if (dragRef.current.moved) {
-      try {
-        localStorage.setItem("music_card_pos", JSON.stringify(cardPos));
-      } catch {
-        // ignore
-      }
+    if (!dragRef.current.moved) return;
+
+    const currentPos = cardPosRef.current;
+    const distanceToLeft = currentPos.x;
+    const distanceToRight = window.innerWidth - (currentPos.x + CARD_WIDTH);
+    const nextDockSide: DockSide = distanceToLeft <= EDGE_SNAP_DISTANCE
+      ? "left"
+      : distanceToRight <= EDGE_SNAP_DISTANCE
+        ? "right"
+        : null;
+
+    if (nextDockSide) {
+      const nextPos = { ...currentPos, x: getDockedX(nextDockSide, true) };
+      setDockSide(nextDockSide);
+      setCollapsed(true);
+      updateCardPos(nextPos);
+      saveCardState(nextPos, nextDockSide, true);
+      return;
     }
+
+    setDockSide(null);
+    setCollapsed(false);
+    saveCardState(currentPos, null, false);
+  };
+
+  const handleExpand = (ignoreDrag = false) => {
+    if (!collapsed || !dockSide || (!ignoreDrag && dragRef.current.moved)) return;
+    const nextPos = { ...cardPosRef.current, x: getDockedX(dockSide, false) };
+    setCollapsed(false);
+    updateCardPos(nextPos);
+    saveCardState(nextPos, dockSide, false);
   };
 
   const handleClose = () => {
@@ -150,7 +224,7 @@ export default function MusicFloatingCard() {
     }
   };
 
-  if (!mounted || !activePostMusic) return null;
+  if (!activePostMusic || !cardReady) return null;
 
   const coverUrl = resolveCover(activePostMusic.cover || "");
 
@@ -163,8 +237,11 @@ export default function MusicFloatingCard() {
         top: cardPos.y,
         transform: dragging ? "scale(1.02)" : "scale(1)",
         touchAction: "none",
+        transition: dragging
+          ? "none"
+          : "left 260ms cubic-bezier(0.22, 1, 0.36, 1), top 260ms cubic-bezier(0.22, 1, 0.36, 1), transform 150ms ease",
       }}
-      className="fixed z-[100] w-[80px] select-none overflow-hidden rounded-[6px] shadow-[0_3px_10px_rgba(0,0,0,0.15)] transition-transform duration-150"
+      className="fixed z-[100] w-[80px] select-none overflow-hidden rounded-[6px] shadow-[0_3px_10px_rgba(0,0,0,0.15)]"
     >
       {/* 整张卡片背景：封面图模糊放大铺满，让控制条磨砂后呈现封面颜色 */}
       {coverUrl ? (
@@ -184,6 +261,16 @@ export default function MusicFloatingCard() {
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
         onPointerCancel={onPointerUp}
+        onClick={() => handleExpand()}
+        role={collapsed ? "button" : undefined}
+        aria-label={collapsed ? "展开音乐播放器" : undefined}
+        tabIndex={collapsed ? 0 : undefined}
+        onKeyDown={(e) => {
+          if (collapsed && (e.key === "Enter" || e.key === " ")) {
+            e.preventDefault();
+            handleExpand(true);
+          }
+        }}
         className="relative aspect-square w-full cursor-grab overflow-hidden active:cursor-grabbing"
       >
         {coverUrl ? (
